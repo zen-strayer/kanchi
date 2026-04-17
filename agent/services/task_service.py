@@ -1120,9 +1120,9 @@ class TaskService:
             query, filters, start_time, end_time,
             filter_state, filter_worker, filter_task, filter_queue, search
         )
-        query = self._apply_sorting(query, sort_by, sort_order)
+        total_events = query.with_entities(func.count(TaskEventDB.id)).scalar()
 
-        total_events = query.count()
+        query = self._apply_sorting(query, sort_by, sort_order)
         start_idx = page * limit
         events_db = query.offset(start_idx).limit(limit).all()
 
@@ -1186,9 +1186,9 @@ class TaskService:
             filter_state, filter_worker, filter_task, filter_queue, search,
             model=TaskLatestDB
         )
-        query = self._apply_sorting(query, sort_by, sort_order, model=TaskLatestDB)
+        total_events = query.with_entities(func.count(TaskLatestDB.task_id)).scalar()
 
-        total_events = query.count()
+        query = self._apply_sorting(query, sort_by, sort_order, model=TaskLatestDB)
         start_idx = page * limit
         events_db = query.offset(start_idx).limit(limit).all()
 
