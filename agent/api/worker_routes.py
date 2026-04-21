@@ -11,7 +11,7 @@ from security.dependencies import get_auth_dependency
 from services import WorkerService
 
 
-def create_router(app_state) -> APIRouter:
+def create_router(app_state) -> APIRouter:  # noqa: C901
     """Create worker router with dependency injection."""
     router = APIRouter(prefix="/api", tags=["workers"])
 

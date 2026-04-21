@@ -351,7 +351,6 @@ class TestDailyStatsService(DatabaseTestCase):
         self.assertEqual(summary["total_executions"], 3)
 
     def test_get_task_trend_summary_calculates_success_rate(self):
-        today = datetime.now(UTC).date()
         base = datetime.now(UTC)
 
         for i in range(8):

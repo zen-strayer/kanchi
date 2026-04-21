@@ -11,7 +11,7 @@ from services.workflow_catalog import TRIGGER_METADATA
 from services.workflow_service import WorkflowService
 
 
-def create_router(app_state) -> APIRouter:
+def create_router(app_state) -> APIRouter:  # noqa: C901
     """Create workflow router with dependency injection."""
     router = APIRouter(prefix="/api/workflows", tags=["workflows"])
 
@@ -42,7 +42,7 @@ def create_router(app_state) -> APIRouter:
         try:
             workflow = workflow_service.create_workflow(workflow_data)
         except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+            raise HTTPException(status_code=400, detail=str(e)) from e
         return workflow
 
     @router.get("", response_model=list[WorkflowDefinition])
@@ -78,7 +78,7 @@ def create_router(app_state) -> APIRouter:
         try:
             workflow = workflow_service.update_workflow(workflow_id, updates)
         except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+            raise HTTPException(status_code=400, detail=str(e)) from e
 
         if not workflow:
             raise HTTPException(status_code=404, detail="Workflow not found")

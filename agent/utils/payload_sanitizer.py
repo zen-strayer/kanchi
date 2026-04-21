@@ -23,12 +23,12 @@ def _placeholder() -> dict[str, str]:
     }
 
 
-def sanitize_payload(value: Any) -> tuple[Any, bool]:
+def sanitize_payload(value: Any) -> tuple[Any, bool]:  # noqa: C901
     """Return a JSON-serializable copy of *value* and flag when we had to truncate."""
 
     truncated = False
 
-    def _sanitize(item: Any) -> Any:
+    def _sanitize(item: Any) -> Any:  # noqa: C901
         nonlocal truncated
 
         if item is Ellipsis:

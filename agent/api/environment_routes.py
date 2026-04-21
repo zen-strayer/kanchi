@@ -13,7 +13,7 @@ from services import EnvironmentService
 logger = logging.getLogger(__name__)
 
 
-def create_router(app_state) -> APIRouter:
+def create_router(app_state) -> APIRouter:  # noqa: C901
     """Create environment router with dependency injection."""
     router = APIRouter(prefix="/api/environments", tags=["environments"])
 
@@ -38,7 +38,7 @@ def create_router(app_state) -> APIRouter:
             return service.create_environment(env_create)
         except Exception as e:
             logger.error(f"Error creating environment: {e}", exc_info=True)
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail=str(e)) from e
 
     @router.get("", response_model=list[EnvironmentResponse])
     async def list_environments(session: Session = Depends(get_db)):
@@ -48,7 +48,7 @@ def create_router(app_state) -> APIRouter:
             return service.list_environments()
         except Exception as e:
             logger.error(f"Error listing environments: {e}", exc_info=True)
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail=str(e)) from e
 
     @router.get("/{env_id}", response_model=EnvironmentResponse)
     async def get_environment(env_id: str, session: Session = Depends(get_db)):
@@ -63,7 +63,7 @@ def create_router(app_state) -> APIRouter:
             raise
         except Exception as e:
             logger.error(f"Error getting environment: {e}", exc_info=True)
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail=str(e)) from e
 
     @router.patch("/{env_id}", response_model=EnvironmentResponse)
     async def update_environment(env_id: str, env_update: EnvironmentUpdate, session: Session = Depends(get_db)):
@@ -78,7 +78,7 @@ def create_router(app_state) -> APIRouter:
             raise
         except Exception as e:
             logger.error(f"Error updating environment: {e}", exc_info=True)
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail=str(e)) from e
 
     @router.delete("/{env_id}", status_code=204)
     async def delete_environment(env_id: str, session: Session = Depends(get_db)):
@@ -91,6 +91,6 @@ def create_router(app_state) -> APIRouter:
             raise
         except Exception as e:
             logger.error(f"Error deleting environment: {e}", exc_info=True)
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail=str(e)) from e
 
     return router

@@ -48,7 +48,7 @@ class TestWorkflowCircuitBreaker(DatabaseTestCase):
         root_id = str(uuid.uuid4())
         context = {"root_id": root_id, "task_id": str(uuid.uuid4())}
 
-        for i in range(3):
+        for _ in range(3):
             execution = WorkflowExecutionDB(
                 workflow_id=workflow.id,
                 trigger_type="task.failed",
@@ -80,7 +80,7 @@ class TestWorkflowCircuitBreaker(DatabaseTestCase):
         root_id = str(uuid.uuid4())
         context = {"root_id": root_id, "task_id": str(uuid.uuid4())}
 
-        for i in range(3):
+        for _ in range(3):
             execution = WorkflowExecutionDB(
                 workflow_id=workflow.id,
                 trigger_type="task.failed",
@@ -110,7 +110,7 @@ class TestWorkflowCircuitBreaker(DatabaseTestCase):
         context = {"root_id": root_id, "task_id": str(uuid.uuid4())}
 
         old_time = datetime.now(UTC) - timedelta(seconds=400)
-        for i in range(3):
+        for _ in range(3):
             execution = WorkflowExecutionDB(
                 workflow_id=workflow.id,
                 trigger_type="task.failed",
@@ -136,7 +136,7 @@ class TestWorkflowCircuitBreaker(DatabaseTestCase):
         root_id = str(uuid.uuid4())
         context = {"root_id": root_id, "task_id": str(uuid.uuid4())}
 
-        for i in range(10):
+        for _ in range(10):
             execution = WorkflowExecutionDB(
                 workflow_id=workflow.id,
                 trigger_type="task.failed",
@@ -181,7 +181,7 @@ class TestWorkflowCircuitBreaker(DatabaseTestCase):
         root_id_2 = str(uuid.uuid4())
 
         for root_id in [root_id_1, root_id_2]:
-            for i in range(2):
+            for _ in range(2):
                 execution = WorkflowExecutionDB(
                     workflow_id=workflow.id,
                     trigger_type="task.failed",
@@ -244,7 +244,7 @@ class TestWorkflowCircuitBreaker(DatabaseTestCase):
 
         context = {"task_id": str(uuid.uuid4()), "root_id": str(uuid.uuid4())}
 
-        for i in range(100):
+        for _ in range(100):
             execution = WorkflowExecutionDB(
                 workflow_id=workflow.id,
                 trigger_type="task.failed",

@@ -12,7 +12,7 @@ class TestRetryChainTracking(DatabaseTestCase):
         self.base_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
 
     def test_enrich_with_retry_info_finds_parent(self):
-        original_event = self.create_task_event_db(
+        self.create_task_event_db(
             task_id="original-123",
             task_name="tasks.example",
             event_type="task-failed",
@@ -114,7 +114,7 @@ class TestRetryChainTracking(DatabaseTestCase):
         self.assertTrue(events[1].is_retry)
 
     def test_orphaned_task_retry(self):
-        orphaned_db = self.create_task_event_db(
+        self.create_task_event_db(
             task_id="orphaned-1",
             event_type="task-started",
             timestamp=self.base_time,
@@ -150,7 +150,7 @@ class TestRetryChainTracking(DatabaseTestCase):
         self.assertIsNone(retry_event.retry_of)
 
     def test_circular_reference_prevention(self):
-        original_db = self.create_task_event_db(
+        self.create_task_event_db(
             task_id="original-1", event_type="task-failed", timestamp=self.base_time
         )
 

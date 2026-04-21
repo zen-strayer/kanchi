@@ -122,7 +122,7 @@ class WorkflowEngine:
         else:  # OR
             return any(results)
 
-    def _evaluate_single_condition(self, condition: Condition, context: dict[str, Any]) -> bool:
+    def _evaluate_single_condition(self, condition: Condition, context: dict[str, Any]) -> bool:  # noqa: C901
         """Evaluate a single condition."""
         field_value = context.get(condition.field)
 

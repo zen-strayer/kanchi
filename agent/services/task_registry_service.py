@@ -234,7 +234,7 @@ class TaskRegistryService:
             if tags:
                 all_tags.update(tags)
 
-        return sorted(list(all_tags))
+        return sorted(all_tags)
 
     def get_task_timeline(self, task_name: str, hours: int = 24, bucket_size_minutes: int = 60) -> TaskTimelineResponse:
         """

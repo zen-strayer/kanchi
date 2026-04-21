@@ -54,7 +54,7 @@ class TestWorkflowRetryLimits(DatabaseTestCase):
         )
 
         current_task_id = task_id
-        for i in range(10):
+        for _ in range(10):
             retry_id = str(uuid.uuid4())
             self.create_task_event_db(
                 task_id=retry_id, task_name="tasks.test", event_type="task-failed", root_id=root_id, queue="default"
@@ -87,7 +87,7 @@ class TestWorkflowRetryLimits(DatabaseTestCase):
         )
 
         current_task_id = task_id
-        for i in range(5):
+        for _ in range(5):
             retry_id = str(uuid.uuid4())
             self.create_task_event_db(
                 task_id=retry_id,
@@ -130,7 +130,7 @@ class TestWorkflowRetryLimits(DatabaseTestCase):
         )
 
         current_task_id = task_id
-        for i in range(2):
+        for _ in range(2):
             retry_id = str(uuid.uuid4())
             self.create_task_event_db(
                 task_id=retry_id,
@@ -164,7 +164,7 @@ class TestWorkflowRetryLimits(DatabaseTestCase):
         )
 
         current_task_id = task_id
-        for i in range(4):
+        for _ in range(4):
             retry_id = str(uuid.uuid4())
             self.create_task_event_db(
                 task_id=retry_id, task_name="tasks.test", event_type="task-failed", root_id=root_id, queue="default"
@@ -197,7 +197,7 @@ class TestWorkflowRetryLimits(DatabaseTestCase):
         )
 
         current_task_id = task_id
-        for i in range(3):
+        for _ in range(3):
             retry_id = str(uuid.uuid4())
             self.create_task_event_db(
                 task_id=retry_id, task_name="tasks.test", event_type="task-failed", root_id=root_id, queue="default"

@@ -58,6 +58,6 @@ def create_router(app_state) -> APIRouter:
 
             return {"status": "success", "timestamp": datetime.now(UTC).isoformat()}
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to log message: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Failed to log message: {str(e)}") from e
 
     return router

@@ -13,7 +13,7 @@ from services import AppConfigService
 logger = logging.getLogger(__name__)
 
 
-def create_router(app_state) -> APIRouter:
+def create_router(app_state) -> APIRouter:  # noqa: C901
     """Create configuration router with dependency injection."""
     router = APIRouter(prefix="/api/config", tags=["config"])
 

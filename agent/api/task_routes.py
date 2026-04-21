@@ -23,7 +23,7 @@ class ResolveTaskRequest(BaseModel):
     resolved_by: str | None = None
 
 
-def create_router(app_state) -> APIRouter:
+def create_router(app_state) -> APIRouter:  # noqa: C901
     """Create task router with dependency injection."""
     router = APIRouter(prefix="/api", tags=["tasks"])
 
@@ -230,7 +230,7 @@ def create_router(app_state) -> APIRouter:
         task_service.create_retry_relationship(task_id, new_task_id)
         session.commit()
 
-        result = app_state.monitor_instance.app.send_task(
+        app_state.monitor_instance.app.send_task(
             original_task.task_name,
             args=args,
             kwargs=kwargs,

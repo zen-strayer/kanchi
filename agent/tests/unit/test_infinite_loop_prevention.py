@@ -134,7 +134,7 @@ class TestInfiniteLoopPrevention(DatabaseTestCase):
         max_retries = 5
         execution_count = 0
 
-        for i in range(10):
+        for _ in range(10):
             context = {"root_id": root_id, "task_id": task_id}
 
             state = self.workflow_service.is_circuit_breaker_open(workflow, context)

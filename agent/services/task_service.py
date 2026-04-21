@@ -230,7 +230,7 @@ class TaskService:
         latest_orphaned_sq = self.session.query(
             TaskEventDB.task_id,
             func.max(TaskEventDB.timestamp).label("max_timestamp"),
-        ).filter(TaskEventDB.is_orphan == True)
+        ).filter(TaskEventDB.is_orphan.is_(True))
 
         if self.active_env:
             env_conditions = []

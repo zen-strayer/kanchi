@@ -202,7 +202,7 @@ class TestStateReset:
 
         assert len(states_seen) == 3
         # Each attempt should have gotten a distinct State instance
-        assert len(set(id(s) for s in states_seen)) == 3, "state should be reset to a new object on each reconnect"
+        assert len({id(s) for s in states_seen}) == 3, "state should be reset to a new object on each reconnect"
 
 
 # ---------------------------------------------------------------------------

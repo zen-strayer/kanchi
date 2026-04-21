@@ -1,6 +1,6 @@
 import ast
 from datetime import UTC, date, datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
@@ -88,7 +88,7 @@ class TaskEvent(BaseModel):
                     parsed = []
                 sanitized, _ = sanitize_payload(parsed)
                 return sanitized if isinstance(sanitized, list) else []
-            except:
+            except Exception:
                 return []
         sanitized, _ = sanitize_payload(v)
         return sanitized if isinstance(sanitized, list) else []
@@ -106,7 +106,7 @@ class TaskEvent(BaseModel):
                 parsed = ast.literal_eval(v) if v and v != "{}" else {}
                 sanitized, _ = sanitize_payload(parsed if isinstance(parsed, dict) else {})
                 return sanitized if isinstance(sanitized, dict) else {}
-            except:
+            except Exception:
                 return {}
         sanitized, _ = sanitize_payload(v)
         return sanitized if isinstance(sanitized, dict) else {}
@@ -603,7 +603,7 @@ class StoredEventsResponse(BaseModel):
     timestamp: datetime
 
 
-class ConditionOperator(str, Enum):
+class ConditionOperator(StrEnum):
     """Supported condition operators."""
 
     EQUALS = "equals"

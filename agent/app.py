@@ -64,7 +64,7 @@ async def lifespan(app: FastAPI):
         logger.info("Monitor thread signalled to stop (daemon; exits with process)")
 
 
-def create_app() -> FastAPI:
+def create_app() -> FastAPI:  # noqa: C901
     """Create and configure the FastAPI application."""
     config = Config.from_env()
     app_state.config = config

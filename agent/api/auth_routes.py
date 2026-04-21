@@ -26,7 +26,7 @@ from services import AuthService
 logger = logging.getLogger(__name__)
 
 
-def create_router(app_state) -> APIRouter:
+def create_router(app_state) -> APIRouter:  # noqa: C901
     router = APIRouter(prefix="/api/auth", tags=["auth"])
 
     def get_db():
@@ -258,7 +258,7 @@ def _oauth_error_response(message: str, allowed_origins: list[str]) -> HTMLRespo
 def _build_oauth_callback_html(payload: dict, redirect: str, allowed_origins: Iterable[str]) -> str:
     serialized = json.dumps(payload)
     redirect_str = json.dumps(redirect)
-    origins_str = json.dumps(sorted(set(origin for origin in allowed_origins if origin)))
+    origins_str = json.dumps(sorted({origin for origin in allowed_origins if origin}))
     return f"""<!DOCTYPE html>
 <html lang=\"en\">
 <head><meta charset=\"utf-8\"><title>Authentication complete</title></head>

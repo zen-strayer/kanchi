@@ -57,14 +57,14 @@ def _matches_filters(event_data: Any, filters: dict[str, Any]) -> bool:
     return True
 
 
-def create_router(app_state) -> APIRouter:
+def create_router(app_state) -> APIRouter:  # noqa: C901
     """Create websocket router with dependency injection."""
     router = APIRouter(tags=["websocket"])
 
     config = app_state.config or Config.from_env()
 
     @router.websocket("/ws")
-    async def websocket_endpoint(websocket: WebSocket):
+    async def websocket_endpoint(websocket: WebSocket):  # noqa: C901
         """WebSocket endpoint for real-time event streaming."""
         if not app_state.connection_manager:
             await websocket.close(code=1011, reason="Server not initialized")

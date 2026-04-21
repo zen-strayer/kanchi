@@ -18,7 +18,7 @@ from security.dependencies import get_auth_dependency
 from services import DailyStatsService, EnvironmentService, SessionService, TaskRegistryService
 
 
-def create_router(app_state) -> APIRouter:
+def create_router(app_state) -> APIRouter:  # noqa: C901
     """Create task registry router with dependency injection."""
     router = APIRouter(prefix="/api/registry", tags=["registry"])
 

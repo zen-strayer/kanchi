@@ -73,7 +73,7 @@ class WorkflowService:
 
         return ordered
 
-    def _json_safe(self, value: Any) -> Any:
+    def _json_safe(self, value: Any) -> Any:  # noqa: C901
         """Convert complex objects (datetimes, UUIDs, Pydantic models) into JSON-safe structures."""
         if value is None:
             return None
@@ -265,7 +265,7 @@ class WorkflowService:
         query = self.session.query(WorkflowDB)
 
         if enabled_only:
-            query = query.filter(WorkflowDB.enabled == True)
+            query = query.filter(WorkflowDB.enabled.is_(True))
 
         if trigger_type:
             query = query.filter(WorkflowDB.trigger_type == trigger_type)
@@ -334,7 +334,7 @@ class WorkflowService:
         """Get all enabled workflows for a specific trigger type."""
         workflows_db = (
             self.session.query(WorkflowDB)
-            .filter(and_(WorkflowDB.enabled == True, WorkflowDB.trigger_type == trigger_type))
+            .filter(and_(WorkflowDB.enabled.is_(True), WorkflowDB.trigger_type == trigger_type))
             .order_by(WorkflowDB.priority.desc())
             .all()
         )

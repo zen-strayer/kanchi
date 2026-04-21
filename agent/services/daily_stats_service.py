@@ -15,7 +15,7 @@ class DailyStatsService:
     def __init__(self, session: Session):
         self.session = session
 
-    def update_daily_stats(self, task_event: TaskEvent):
+    def update_daily_stats(self, task_event: TaskEvent):  # noqa: C901
         event_date = task_event.timestamp.date()
         task_name = task_event.task_name
 

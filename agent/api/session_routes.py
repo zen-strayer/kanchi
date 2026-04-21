@@ -14,12 +14,11 @@ from services import SessionService
 logger = logging.getLogger(__name__)
 
 
-def create_router(app_state) -> APIRouter:
+def create_router(app_state) -> APIRouter:  # noqa: C901
     """Create session router with dependency injection."""
     router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
     config = app_state.config or Config.from_env()
-    require_user_dep = get_auth_dependency(app_state, require=True)
     optional_user_dep = get_auth_dependency(app_state, require=False)
 
     def get_db() -> Session:
@@ -59,7 +58,7 @@ def create_router(app_state) -> APIRouter:
             )
         except Exception as e:
             logger.error(f"Error initializing session: {e}", exc_info=True)
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail=str(e)) from e
 
     @router.get("/me", response_model=UserSessionResponse)
     async def get_current_session(
@@ -87,7 +86,7 @@ def create_router(app_state) -> APIRouter:
             raise HTTPException(status_code=403, detail=str(exc)) from exc
         except Exception as e:
             logger.error(f"Error getting session: {e}", exc_info=True)
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail=str(e)) from e
 
     @router.patch("/me", response_model=UserSessionResponse)
     async def update_current_session(
@@ -116,7 +115,7 @@ def create_router(app_state) -> APIRouter:
             raise HTTPException(status_code=403, detail=str(exc)) from exc
         except Exception as e:
             logger.error(f"Error updating session: {e}", exc_info=True)
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail=str(e)) from e
 
     @router.post("/me/environment/{environment_id}", response_model=UserSessionResponse)
     async def set_session_environment(
@@ -145,7 +144,7 @@ def create_router(app_state) -> APIRouter:
             raise HTTPException(status_code=403, detail=str(exc)) from exc
         except Exception as e:
             logger.error(f"Error setting environment: {e}", exc_info=True)
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail=str(e)) from e
 
     @router.delete("/me/environment", response_model=UserSessionResponse)
     async def clear_session_environment(
@@ -173,6 +172,6 @@ def create_router(app_state) -> APIRouter:
             raise HTTPException(status_code=403, detail=str(exc)) from exc
         except Exception as e:
             logger.error(f"Error clearing environment: {e}", exc_info=True)
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail=str(e)) from e
 
     return router

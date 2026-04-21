@@ -70,8 +70,8 @@ def _verify_pbkdf2_sha256(encoded: str, password: str) -> bool:
     """Validate pbkdf2_sha256 password hash (Django-compatible)."""
     try:
         algorithm, iterations_str, salt, hashed = encoded.split("$", 3)
-    except ValueError:
-        raise AuthError("Invalid password hash format")
+    except ValueError as e:
+        raise AuthError("Invalid password hash format") from e
 
     if algorithm != "pbkdf2_sha256":
         raise AuthError("Unsupported password hash algorithm")
