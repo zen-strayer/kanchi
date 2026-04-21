@@ -150,9 +150,7 @@ class TestRetryChainTracking(DatabaseTestCase):
         self.assertIsNone(retry_event.retry_of)
 
     def test_circular_reference_prevention(self):
-        self.create_task_event_db(
-            task_id="original-1", event_type="task-failed", timestamp=self.base_time
-        )
+        self.create_task_event_db(task_id="original-1", event_type="task-failed", timestamp=self.base_time)
 
         retry_db = self.create_task_event_db(
             task_id="retry-1", event_type="task-started", timestamp=self.base_time + timedelta(seconds=5)
