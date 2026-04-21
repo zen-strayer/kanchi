@@ -275,5 +275,58 @@ class TestOrphanDetectionService(DatabaseTestCase):
         self.assertEqual(orphaned_tasks[0].task_id, "task-2")
 
 
+    def test_mark_tasks_as_orphaned_also_updates_task_latest(self):
+        """task_latest snapshot must reflect is_orphan=True after orphan detection runs."""
+        from database import TaskLatestDB
+
+        self.create_task_event_db(
+            task_id="orphan-latest-1",
+            event_type="task-started",
+            timestamp=self.base_time,
+            hostname="worker1",
+        )
+        task_latest = TaskLatestDB(
+            task_id="orphan-latest-1",
+            event_id=1,
+            task_name="tasks.example",
+            event_type="task-started",
+            timestamp=self.base_time,
+            hostname="worker1",
+            is_orphan=False,
+        )
+        self.session.add(task_latest)
+        self.session.commit()
+
+        orphaned_at = self.base_time + timedelta(seconds=10)
+        self.service.find_and_mark_orphaned_tasks(
+            hostname="worker1",
+            orphaned_at=orphaned_at,
+        )
+
+        self.session.expire_all()
+        updated = self.session.query(TaskLatestDB).filter_by(task_id="orphan-latest-1").first()
+        self.assertIsNotNone(updated)
+        self.assertTrue(updated.is_orphan)
+        self.assertIsNotNone(updated.orphaned_at)
+
+    def test_mark_tasks_as_orphaned_task_latest_missing_row_is_safe(self):
+        """If task_latest has no row for a task_id, the bulk update is a silent no-op."""
+        self.create_task_event_db(
+            task_id="orphan-no-latest",
+            event_type="task-started",
+            timestamp=self.base_time,
+            hostname="worker1",
+        )
+
+        orphaned_at = self.base_time + timedelta(seconds=10)
+        try:
+            self.service.find_and_mark_orphaned_tasks(
+                hostname="worker1",
+                orphaned_at=orphaned_at,
+            )
+        except Exception as e:
+            self.fail(f"find_and_mark_orphaned_tasks raised unexpectedly: {e}")
+
+
 if __name__ == '__main__':
     unittest.main()

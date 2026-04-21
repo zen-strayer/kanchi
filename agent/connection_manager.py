@@ -20,7 +20,8 @@ class ConnectionManager:
         self._loop: Optional[asyncio.AbstractEventLoop] = None
 
     def start_background_broadcaster(self):
-        if self._broadcast_task is None and not self._running:
+        task_inactive = self._broadcast_task is None or self._broadcast_task.done()
+        if task_inactive and not self._running:
             self._running = True
             self._loop = asyncio.get_event_loop()
             self.message_queue = asyncio.Queue()
@@ -59,6 +60,7 @@ class ConnectionManager:
             except asyncio.CancelledError:
                 pass
             self._broadcast_task = None
+        self.message_queue = None
 
     async def connect(self, websocket: WebSocket):
         await websocket.accept()

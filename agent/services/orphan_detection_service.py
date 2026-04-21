@@ -5,7 +5,7 @@ from typing import List
 from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
 
-from database import TaskEventDB
+from database import TaskEventDB, TaskLatestDB
 from models import TaskEvent
 from constants import NON_TERMINAL_EVENT_TYPES, EventType
 
@@ -63,6 +63,13 @@ class OrphanDetectionService:
 
         self.session.query(TaskEventDB).filter(
             TaskEventDB.task_id.in_(task_ids)
+        ).update({
+            'is_orphan': True,
+            'orphaned_at': orphaned_at
+        }, synchronize_session=False)
+
+        self.session.query(TaskLatestDB).filter(
+            TaskLatestDB.task_id.in_(task_ids)
         ).update({
             'is_orphan': True,
             'orphaned_at': orphaned_at

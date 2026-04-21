@@ -101,10 +101,10 @@ class DailyStatsService:
 
     def _update_runtime_stats(self, stats: TaskDailyStatsDB, runtime: float):
         """
-        Update runtime statistics (avg, min, max, percentiles).
+        Update runtime statistics (avg, min, max).
 
-        For percentiles, we use a simple approximation since we don't store
-        all individual runtimes. For accurate percentiles, query the raw task_events table.
+        avg_runtime uses Welford's online algorithm. stats.succeeded has already
+        been incremented before this method is called, so it equals the new count n.
         """
         if stats.min_runtime is None or runtime < stats.min_runtime:
             stats.min_runtime = runtime
@@ -114,11 +114,8 @@ class DailyStatsService:
         if stats.avg_runtime is None:
             stats.avg_runtime = runtime
         else:
-            count = stats.succeeded
-            if count > 0:
-                stats.avg_runtime = ((stats.avg_runtime * count) + runtime) / (count + 1)
-            else:
-                stats.avg_runtime = runtime
+            n = stats.succeeded  # already the new count (incremented before this call)
+            stats.avg_runtime = stats.avg_runtime + (runtime - stats.avg_runtime) / n
 
     def get_daily_stats(
         self,

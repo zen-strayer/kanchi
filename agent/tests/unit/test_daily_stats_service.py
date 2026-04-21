@@ -487,6 +487,33 @@ class TestDailyStatsService(DatabaseTestCase):
         stats = self.service.get_stats_for_date("tasks.example", date(2024, 6, 15))
         self.assertIsNotNone(stats)
 
+    def test_avg_runtime_is_exact_mean_of_three_tasks(self):
+        """Welford's method must produce the true mean: (10+20+30)/3 == 20.0."""
+        for i, runtime in enumerate([10.0, 20.0, 30.0]):
+            self.service.update_daily_stats(self.create_task_event(
+                task_id=f"task-avg-{i}",
+                task_name="tasks.avg_check",
+                event_type="task-succeeded",
+                timestamp=self.base_time + timedelta(seconds=i),
+                runtime=runtime,
+            ))
+
+        stats = self.service.get_stats_for_date("tasks.avg_check", date(2024, 6, 15))
+        self.assertAlmostEqual(stats.avg_runtime, 20.0, places=9)
+
+    def test_avg_runtime_single_task_equals_its_runtime(self):
+        """First task sets avg_runtime directly — no formula involved."""
+        self.service.update_daily_stats(self.create_task_event(
+            task_id="task-single",
+            task_name="tasks.single_check",
+            event_type="task-succeeded",
+            timestamp=self.base_time,
+            runtime=42.5,
+        ))
+
+        stats = self.service.get_stats_for_date("tasks.single_check", date(2024, 6, 15))
+        self.assertAlmostEqual(stats.avg_runtime, 42.5, places=9)
+
 
 if __name__ == '__main__':
     unittest.main()
