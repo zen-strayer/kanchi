@@ -17,14 +17,14 @@ dev:
 	@echo "Unified logging enabled at agent/kanchi.log"
 	@echo ""
 	@trap 'kill 0' EXIT; \
-	(cd agent && DEVELOPMENT_MODE=true poetry run python app.py) & \
+	(cd agent && DEVELOPMENT_MODE=true uv run python app.py) & \
 	(cd frontend && npm run dev) & \
 	wait
 
 backend:
 	@echo "Starting backend on http://localhost:8765..."
 	@echo "To enable unified logging, set DEVELOPMENT_MODE=true"
-	cd agent && poetry run python app.py
+	cd agent && uv run python app.py
 
 frontend:
 	@echo "Starting frontend on http://localhost:3000..."
@@ -40,7 +40,7 @@ seed:
 	@read -p "Continue? [y/N] " -n 1 -r; \
 	echo; \
 	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-		cd agent && poetry run python seed_database.py --days 7; \
+		cd agent && uv run python seed_database.py --days 7; \
 	else \
 		echo "Cancelled."; \
 	fi
@@ -51,7 +51,7 @@ demo-data:
 	@read -p "Continue? [y/N] " -n 1 -r; \
 	echo; \
 	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-		cd agent && poetry run python generate_demo_data.py --days 7 --tasks-per-day 40; \
+		cd agent && uv run python generate_demo_data.py --days 7 --tasks-per-day 40; \
 	else \
 		echo "Cancelled."; \
 	fi
