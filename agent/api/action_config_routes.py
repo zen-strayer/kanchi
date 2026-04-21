@@ -1,17 +1,12 @@
 """API routes for action configuration management."""
 
-from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from models import (
-    ActionConfigDefinition,
-    ActionConfigCreateRequest,
-    ActionConfigUpdateRequest
-)
-from services.action_config_service import ActionConfigService
 from config import Config
+from models import ActionConfigCreateRequest, ActionConfigDefinition, ActionConfigUpdateRequest
 from security.dependencies import get_auth_dependency
+from services.action_config_service import ActionConfigService
 
 
 def create_router(app_state) -> APIRouter:
@@ -32,36 +27,23 @@ def create_router(app_state) -> APIRouter:
             yield session
 
     @router.post("", response_model=ActionConfigDefinition, status_code=201)
-    async def create_action_config(
-        config_data: ActionConfigCreateRequest,
-        session: Session = Depends(get_db)
-    ):
+    async def create_action_config(config_data: ActionConfigCreateRequest, session: Session = Depends(get_db)):
         """Create a new action configuration (e.g., Slack webhook)."""
         config_service = ActionConfigService(session)
         config = config_service.create_config(config_data)
         return config
 
-    @router.get("", response_model=List[ActionConfigDefinition])
+    @router.get("", response_model=list[ActionConfigDefinition])
     async def list_action_configs(
-        action_type: Optional[str] = None,
-        limit: int = 100,
-        offset: int = 0,
-        session: Session = Depends(get_db)
+        action_type: str | None = None, limit: int = 100, offset: int = 0, session: Session = Depends(get_db)
     ):
         """List all action configurations."""
         config_service = ActionConfigService(session)
-        configs = config_service.list_configs(
-            action_type=action_type,
-            limit=limit,
-            offset=offset
-        )
+        configs = config_service.list_configs(action_type=action_type, limit=limit, offset=offset)
         return configs
 
     @router.get("/{config_id}", response_model=ActionConfigDefinition)
-    async def get_action_config(
-        config_id: str,
-        session: Session = Depends(get_db)
-    ):
+    async def get_action_config(config_id: str, session: Session = Depends(get_db)):
         """Get a specific action configuration."""
         config_service = ActionConfigService(session)
         config = config_service.get_config(config_id)
@@ -73,9 +55,7 @@ def create_router(app_state) -> APIRouter:
 
     @router.put("/{config_id}", response_model=ActionConfigDefinition)
     async def update_action_config(
-        config_id: str,
-        updates: ActionConfigUpdateRequest,
-        session: Session = Depends(get_db)
+        config_id: str, updates: ActionConfigUpdateRequest, session: Session = Depends(get_db)
     ):
         """Update an action configuration."""
         config_service = ActionConfigService(session)
@@ -87,10 +67,7 @@ def create_router(app_state) -> APIRouter:
         return config
 
     @router.delete("/{config_id}", status_code=204)
-    async def delete_action_config(
-        config_id: str,
-        session: Session = Depends(get_db)
-    ):
+    async def delete_action_config(config_id: str, session: Session = Depends(get_db)):
         """Delete an action configuration."""
         config_service = ActionConfigService(session)
         success = config_service.delete_config(config_id)

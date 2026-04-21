@@ -1,18 +1,18 @@
 """Service for managing application configuration stored in the database."""
 
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from sqlalchemy.orm import Session
 
 from database import AppSettingDB
-from models import AppSetting, AppSettingUpdate, AppConfigSnapshot, TaskIssueConfig
+from models import AppConfigSnapshot, AppSetting, AppSettingUpdate, TaskIssueConfig
 
 logger = logging.getLogger(__name__)
 
 TASK_ISSUE_LOOKBACK_KEY = "task_issue_summary.lookback_hours"
 
-DEFAULT_SETTING_DEFINITIONS: Dict[str, Dict[str, Any]] = {
+DEFAULT_SETTING_DEFINITIONS: dict[str, dict[str, Any]] = {
     TASK_ISSUE_LOOKBACK_KEY: {
         "default": 24,
         "value_type": "number",
@@ -66,7 +66,7 @@ class AppConfigService:
         if created:
             self.session.commit()
 
-    def _definition_for_key(self, key: str) -> Dict[str, Any]:
+    def _definition_for_key(self, key: str) -> dict[str, Any]:
         return DEFAULT_SETTING_DEFINITIONS.get(key, {})
 
     def _normalize_boolean(self, value: Any) -> bool:
@@ -80,7 +80,7 @@ class AppConfigService:
                 return False
         raise ValueError("Boolean setting must be true/false")
 
-    def _normalize_number(self, value: Any) -> Tuple[Any, float]:
+    def _normalize_number(self, value: Any) -> tuple[Any, float]:
         if isinstance(value, (int, float)):
             return value, float(value)
         if isinstance(value, str):
@@ -93,7 +93,7 @@ class AppConfigService:
                 raise ValueError("Numeric setting must be a number") from exc
         raise ValueError("Numeric setting must be a number")
 
-    def _validate_value(self, key: str, value: Any, explicit_type: Optional[str]) -> Tuple[Any, str]:
+    def _validate_value(self, key: str, value: Any, explicit_type: str | None) -> tuple[Any, str]:
         definition = self._definition_for_key(key)
         target_type = explicit_type or definition.get("value_type", "string")
 
@@ -126,16 +126,12 @@ class AppConfigService:
             updated_at=setting.updated_at,
         )
 
-    def list_settings(self) -> List[AppSetting]:
+    def list_settings(self) -> list[AppSetting]:
         self.ensure_defaults()
-        settings = (
-            self.session.query(AppSettingDB)
-            .order_by(AppSettingDB.category.nullslast(), AppSettingDB.key)
-            .all()
-        )
+        settings = self.session.query(AppSettingDB).order_by(AppSettingDB.category.nullslast(), AppSettingDB.key).all()
         return [self._db_to_model(setting) for setting in settings]
 
-    def get_setting(self, key: str) -> Optional[AppSetting]:
+    def get_setting(self, key: str) -> AppSetting | None:
         self.ensure_defaults()
         setting = self.session.query(AppSettingDB).filter_by(key=key).first()
         if not setting:
@@ -199,7 +195,9 @@ class AppConfigService:
             raise
 
     def get_task_issue_lookback_hours(self) -> int:
-        value = self.get_setting_value(TASK_ISSUE_LOOKBACK_KEY, DEFAULT_SETTING_DEFINITIONS[TASK_ISSUE_LOOKBACK_KEY]["default"])
+        value = self.get_setting_value(
+            TASK_ISSUE_LOOKBACK_KEY, DEFAULT_SETTING_DEFINITIONS[TASK_ISSUE_LOOKBACK_KEY]["default"]
+        )
         try:
             normalized, _ = self._normalize_number(value)
             numeric_value = int(normalized)
@@ -216,6 +214,4 @@ class AppConfigService:
         """Return grouped configuration for clients."""
         self.ensure_defaults()
         lookback_hours = self.get_task_issue_lookback_hours()
-        return AppConfigSnapshot(
-            task_issue_summary=TaskIssueConfig(lookback_hours=lookback_hours)
-        )
+        return AppConfigSnapshot(task_issue_summary=TaskIssueConfig(lookback_hours=lookback_hours))

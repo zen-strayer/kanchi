@@ -2,12 +2,13 @@
 
 import logging
 import uuid
-from typing import List, Optional, Dict, Any
+from datetime import UTC, datetime
+from typing import Any
+
 from sqlalchemy.orm import Session
-from datetime import datetime, timezone
 
 from database import ActionConfigDB
-from models import ActionConfigDefinition, ActionConfigCreateRequest, ActionConfigUpdateRequest
+from models import ActionConfigCreateRequest, ActionConfigDefinition, ActionConfigUpdateRequest
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,7 @@ class ActionConfigService:
             name=config_data.name,
             description=config_data.description,
             action_type=config_data.action_type,
-            config=sanitized_config
+            config=sanitized_config,
         )
 
         self.session.add(config_db)
@@ -39,22 +40,19 @@ class ActionConfigService:
 
         return self._db_to_config(config_db)
 
-    def get_config(self, config_id: str) -> Optional[ActionConfigDefinition]:
+    def get_config(self, config_id: str) -> ActionConfigDefinition | None:
         """Get action config by ID."""
         config_db = self.session.query(ActionConfigDB).filter_by(id=config_id).first()
         return self._db_to_config(config_db) if config_db else None
 
-    def get_config_by_name(self, name: str) -> Optional[ActionConfigDefinition]:
+    def get_config_by_name(self, name: str) -> ActionConfigDefinition | None:
         """Get action config by name."""
         config_db = self.session.query(ActionConfigDB).filter_by(name=name).first()
         return self._db_to_config(config_db) if config_db else None
 
     def list_configs(
-        self,
-        action_type: Optional[str] = None,
-        limit: int = 100,
-        offset: int = 0
-    ) -> List[ActionConfigDefinition]:
+        self, action_type: str | None = None, limit: int = 100, offset: int = 0
+    ) -> list[ActionConfigDefinition]:
         """List action configs with filtering."""
         query = self.session.query(ActionConfigDB)
 
@@ -67,11 +65,7 @@ class ActionConfigService:
         configs_db = query.all()
         return [self._db_to_config(c) for c in configs_db]
 
-    def update_config(
-        self,
-        config_id: str,
-        updates: ActionConfigUpdateRequest
-    ) -> Optional[ActionConfigDefinition]:
+    def update_config(self, config_id: str, updates: ActionConfigUpdateRequest) -> ActionConfigDefinition | None:
         """Update an existing action config."""
         config_db = self.session.query(ActionConfigDB).filter_by(id=config_id).first()
 
@@ -86,7 +80,7 @@ class ActionConfigService:
             if hasattr(config_db, field):
                 setattr(config_db, field, value)
 
-        config_db.updated_at = datetime.now(timezone.utc)
+        config_db.updated_at = datetime.now(UTC)
         self.session.commit()
 
         logger.info(f"Updated action config: {config_id}")
@@ -112,10 +106,10 @@ class ActionConfigService:
 
         if config_db:
             config_db.usage_count += 1
-            config_db.last_used_at = datetime.now(timezone.utc)
+            config_db.last_used_at = datetime.now(UTC)
             self.session.commit()
 
-    def _sanitize_config(self, action_type: str, config: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    def _sanitize_config(self, action_type: str, config: dict[str, Any] | None) -> dict[str, Any]:
         """Restrict config fields to the ones supported by the action type."""
         if not config:
             return {}
@@ -140,5 +134,5 @@ class ActionConfigService:
             updated_at=config_db.updated_at,
             created_by=config_db.created_by,
             usage_count=config_db.usage_count,
-            last_used_at=config_db.last_used_at
+            last_used_at=config_db.last_used_at,
         )

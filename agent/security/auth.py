@@ -4,16 +4,15 @@ import base64
 import fnmatch
 import hashlib
 import hmac
-import json
 import secrets
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, Tuple
+from datetime import datetime, timedelta
 
 from fastapi import HTTPException, status
 
 from config import Config
-from .tokens import TokenManager, TokenPayload, TokenError
+
+from .tokens import TokenError, TokenManager, TokenPayload
 
 
 class AuthError(Exception):
@@ -23,10 +22,11 @@ class AuthError(Exception):
 @dataclass
 class AnonymousUser:
     """Represents an unauthenticated requester."""
-    id: Optional[str] = None
-    email: Optional[str] = None
-    provider: Optional[str] = None
-    session_id: Optional[str] = None
+
+    id: str | None = None
+    email: str | None = None
+    provider: str | None = None
+    session_id: str | None = None
 
     @property
     def is_authenticated(self) -> bool:
@@ -36,12 +36,13 @@ class AnonymousUser:
 @dataclass
 class AuthenticatedUser:
     """Minimal authenticated user context."""
+
     id: str
     email: str
     provider: str
     session_id: str
-    name: Optional[str] = None
-    scopes: Tuple[str, ...] = ()
+    name: str | None = None
+    scopes: tuple[str, ...] = ()
 
     @property
     def is_authenticated(self) -> bool:
@@ -51,13 +52,14 @@ class AuthenticatedUser:
 @dataclass
 class OAuthProviderConfig:
     """Configuration for an OAuth provider."""
+
     name: str
     authorize_url: str
     token_url: str
     userinfo_url: str
-    scope: List[str]
-    client_id: Optional[str]
-    client_secret: Optional[str]
+    scope: list[str]
+    client_id: str | None
+    client_secret: str | None
     enabled: bool
 
     def is_available(self) -> bool:
@@ -113,7 +115,7 @@ class AuthManager:
 
         raise AuthError("Basic authentication password not configured")
 
-    def parse_basic_authorization(self, header: str) -> Tuple[str, str]:
+    def parse_basic_authorization(self, header: str) -> tuple[str, str]:
         """Extract username/password from HTTP Basic Authorization header."""
         if not header or not header.startswith("Basic "):
             raise AuthError("Invalid basic authorization header")
@@ -151,7 +153,7 @@ class AuthManager:
             )
         raise AuthError(f"Unsupported provider: {provider}")
 
-    def list_enabled_oauth_providers(self) -> List[str]:
+    def list_enabled_oauth_providers(self) -> list[str]:
         providers = []
         for provider in ("google", "github"):
             cfg = self.get_oauth_provider(provider)
@@ -168,12 +170,12 @@ class AuthManager:
     def create_oauth_state(
         self,
         provider: str,
-        redirect_to: Optional[str] = None,
-        session_id: Optional[str] = None,
+        redirect_to: str | None = None,
+        session_id: str | None = None,
     ) -> str:
         ttl = timedelta(minutes=self.config.oauth_state_ttl_minutes or 5)
         nonce = secrets.token_urlsafe(16)
-        extra: Dict[str, str] = {"prv": provider}
+        extra: dict[str, str] = {"prv": provider}
         if redirect_to:
             extra["redirect_to"] = redirect_to
         if session_id:
@@ -188,7 +190,7 @@ class AuthManager:
         )
         return state_token
 
-    def verify_oauth_state(self, provider: str, state: str) -> Dict[str, str]:
+    def verify_oauth_state(self, provider: str, state: str) -> dict[str, str]:
         try:
             payload = self._state_token_manager.decode(state, expected_type="oauth_state")
         except TokenError as exc:
@@ -197,7 +199,7 @@ class AuthManager:
         if payload.user_id != provider:
             raise AuthError("OAuth state provider mismatch")
 
-        resolved: Dict[str, str] = {"nonce": payload.session_id}
+        resolved: dict[str, str] = {"nonce": payload.session_id}
         for key, value in payload.raw.items():
             if key in {"nonce", "sid"}:
                 continue
@@ -205,7 +207,7 @@ class AuthManager:
         return resolved
 
     # Token helpers
-    def create_access_token(self, user_id: str, session_id: str, scopes: Tuple[str, ...] = ()) -> Tuple[str, datetime]:
+    def create_access_token(self, user_id: str, session_id: str, scopes: tuple[str, ...] = ()) -> tuple[str, datetime]:
         return self.token_manager.create_token(
             token_type="access",
             user_id=user_id,
@@ -214,7 +216,7 @@ class AuthManager:
             scopes=scopes,
         )
 
-    def create_refresh_token(self, user_id: str, session_id: str) -> Tuple[str, datetime]:
+    def create_refresh_token(self, user_id: str, session_id: str) -> tuple[str, datetime]:
         return self.token_manager.create_token(
             token_type="refresh",
             user_id=user_id,

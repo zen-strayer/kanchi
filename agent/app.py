@@ -1,46 +1,45 @@
 """Main FastAPI application for Celery Event Monitor."""
 
 import logging
-import threading
-from typing import Any, Dict, Optional
-import uvicorn
-from contextlib import asynccontextmanager
-import sys
 import platform
-from datetime import datetime, timezone
+import sys
+import threading
+from contextlib import asynccontextmanager
+from datetime import UTC, datetime
+from typing import Any
 
-from fastapi import FastAPI, Depends
+import uvicorn
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
 from config import Config, mask_sensitive_url
-from database import DatabaseManager
 from connection_manager import ConnectionManager
+from database import DatabaseManager
 from event_handler import EventHandler
 from monitor import CeleryEventMonitor
-from worker_health_monitor import WorkerHealthMonitor
 from security.auth import AuthManager
 from security.dependencies import build_auth_dependencies, get_auth_dependency
-
-from kanchi_sdk import send_kanchi_progress
+from worker_health_monitor import WorkerHealthMonitor
 
 logger = logging.getLogger(__name__)
 
 # Track application start time for uptime calculation
-APP_START_TIME = datetime.now(timezone.utc)
+APP_START_TIME = datetime.now(UTC)
 
 
 class ApplicationState:
     """Container for application state and dependencies."""
+
     def __init__(self):
-        self.db_manager: Optional[DatabaseManager] = None
-        self.connection_manager: Optional[ConnectionManager] = None
-        self.event_handler: Optional[EventHandler] = None
-        self.monitor_instance: Optional[CeleryEventMonitor] = None
-        self.monitor_thread: Optional[threading.Thread] = None
-        self.health_monitor: Optional[WorkerHealthMonitor] = None
+        self.db_manager: DatabaseManager | None = None
+        self.connection_manager: ConnectionManager | None = None
+        self.event_handler: EventHandler | None = None
+        self.monitor_instance: CeleryEventMonitor | None = None
+        self.monitor_thread: threading.Thread | None = None
+        self.health_monitor: WorkerHealthMonitor | None = None
         self.workflow_engine = None
-        self.config: Optional[Config] = None
+        self.config: Config | None = None
         self.auth_manager = None
         self.auth_dependencies = None
 
@@ -74,7 +73,7 @@ def create_app() -> FastAPI:
         title="Celery Event Monitor",
         description="Real-time monitoring of Celery task events with WebSocket broadcasting",
         version="0.1.0",
-        lifespan=lifespan
+        lifespan=lifespan,
     )
 
     allowed_origins = config.allowed_origins or ["*"]
@@ -89,18 +88,18 @@ def create_app() -> FastAPI:
     if config.allowed_hosts:
         app.add_middleware(TrustedHostMiddleware, allowed_hosts=config.allowed_hosts)
 
-    from api.task_routes import create_router as create_task_router
-    from api.worker_routes import create_router as create_worker_router
-    from api.websocket_routes import create_router as create_websocket_router
-    from api.log_routes import create_router as create_log_router
-    from api.registry_routes import create_router as create_registry_router
-    from api.environment_routes import create_router as create_environment_router
-    from api.session_routes import create_router as create_session_router
-    from api.workflow_routes import create_router as create_workflow_router
     from api.action_config_routes import create_router as create_action_config_router
     from api.auth_routes import create_router as create_auth_router
-    from api.metrics_routes import create_router as create_metrics_router
     from api.config_routes import create_router as create_config_router
+    from api.environment_routes import create_router as create_environment_router
+    from api.log_routes import create_router as create_log_router
+    from api.metrics_routes import create_router as create_metrics_router
+    from api.registry_routes import create_router as create_registry_router
+    from api.session_routes import create_router as create_session_router
+    from api.task_routes import create_router as create_task_router
+    from api.websocket_routes import create_router as create_websocket_router
+    from api.worker_routes import create_router as create_worker_router
+    from api.workflow_routes import create_router as create_workflow_router
 
     app.include_router(create_task_router(app_state))
     app.include_router(create_worker_router(app_state))
@@ -117,14 +116,14 @@ def create_app() -> FastAPI:
 
     require_user_dep = get_auth_dependency(app_state, require=True)
 
-    def mask_broker_url(broker_url_full: Optional[str]) -> Optional[str]:
+    def mask_broker_url(broker_url_full: str | None) -> str | None:
         if not broker_url_full:
             return None
-        if '@' in broker_url_full:
+        if "@" in broker_url_full:
             try:
-                protocol, rest = broker_url_full.split('://', 1)
-                if '@' in rest:
-                    _, host_part = rest.split('@', 1)
+                protocol, rest = broker_url_full.split("://", 1)
+                if "@" in rest:
+                    _, host_part = rest.split("@", 1)
                     return f"{protocol}://***@{host_part}"
                 return broker_url_full
             except (ValueError, IndexError) as exc:
@@ -132,9 +131,9 @@ def create_app() -> FastAPI:
                 return broker_url_full
         return broker_url_full
 
-    def collect_health_metrics(include_database: bool = False) -> Dict[str, Any]:
+    def collect_health_metrics(include_database: bool = False) -> dict[str, Any]:
         workers_count = len(app_state.monitor_instance.get_workers_info()) if app_state.monitor_instance else 0
-        uptime_seconds = int((datetime.now(timezone.utc) - APP_START_TIME).total_seconds())
+        uptime_seconds = int((datetime.now(UTC) - APP_START_TIME).total_seconds())
         config_ref = app_state.config or Config.from_env()
 
         broker_url_full = None
@@ -145,7 +144,7 @@ def create_app() -> FastAPI:
         else:
             broker_url_full = "amqp://guest@localhost//"
 
-        base_stats: Dict[str, Any] = {
+        base_stats: dict[str, Any] = {
             "status": "healthy",
             "monitor_running": app_state.monitor_thread.is_alive() if app_state.monitor_thread else False,
             "connections": len(app_state.connection_manager.active_connections) if app_state.connection_manager else 0,
@@ -212,40 +211,34 @@ async def initialize_application():
     # Set up unified logging to file (only in development mode)
     if config.development_mode:
         # Clean the log file on startup
-        with open(config.log_file, 'w') as f:
-            f.write('')
+        with open(config.log_file, "w") as f:
+            f.write("")
 
         # Configure root logger
         logging.basicConfig(
             level=getattr(logging, config.log_level),
-            format='%(asctime)s [BACKEND] %(levelname)s - %(message)s',
-            handlers=[
-                logging.FileHandler(config.log_file),
-                logging.StreamHandler()
-            ]
+            format="%(asctime)s [BACKEND] %(levelname)s - %(message)s",
+            handlers=[logging.FileHandler(config.log_file), logging.StreamHandler()],
         )
 
         # Configure frontend logger
-        frontend_logger = logging.getLogger('kanchi.frontend')
+        frontend_logger = logging.getLogger("kanchi.frontend")
         frontend_logger.setLevel(getattr(logging, config.log_level))
         # Create file handler with custom format for frontend logs
         fh = logging.FileHandler(config.log_file)
-        fh.setFormatter(logging.Formatter('%(asctime)s [FRONTEND] %(levelname)s - %(message)s'))
+        fh.setFormatter(logging.Formatter("%(asctime)s [FRONTEND] %(levelname)s - %(message)s"))
         frontend_logger.addHandler(fh)
         frontend_logger.propagate = False  # Don't propagate to root logger
 
         logger.info("Development mode enabled - unified logging active")
     else:
         # Production mode - standard logging without file output
-        logging.basicConfig(
-            level=getattr(logging, config.log_level),
-            format=config.log_format
-        )
+        logging.basicConfig(level=getattr(logging, config.log_level), format=config.log_format)
 
     app_state.db_manager = DatabaseManager(config.database_url)
     logger.info(f"Running database migrations for: {mask_sensitive_url(config.database_url)}")
     app_state.db_manager.run_migrations()
-    logger.info(f"Database migrations completed")
+    logger.info("Database migrations completed")
 
     # Seed default configuration entries
     try:
@@ -269,16 +262,15 @@ async def initialize_application():
 
     # Initialize workflow engine
     from services.workflow_engine import WorkflowEngine
+
     app_state.workflow_engine = WorkflowEngine(
         db_manager=app_state.db_manager,
-        monitor_instance=None  # Will be set after monitor starts
+        monitor_instance=None,  # Will be set after monitor starts
     )
 
     # Pass workflow engine to event handler
     app_state.event_handler = EventHandler(
-        app_state.db_manager,
-        app_state.connection_manager,
-        app_state.workflow_engine
+        app_state.db_manager, app_state.connection_manager, app_state.workflow_engine
     )
 
     start_monitor(config)
@@ -294,18 +286,18 @@ def start_monitor(config: Config):
     if app_state.monitor_thread and app_state.monitor_thread.is_alive():
         logger.warning("Monitor already running")
         return
-    
+
     logger.info(f"Starting Celery monitor with broker: {mask_sensitive_url(config.broker_url)}")
     app_state.monitor_instance = CeleryEventMonitor(
         broker_url=config.broker_url,
         allow_pickle_serialization=config.enable_pickle_serialization,
     )
-    
+
     app_state.monitor_instance.set_task_callback(app_state.event_handler.handle_task_event)
     app_state.monitor_instance.set_worker_callback(app_state.event_handler.handle_worker_event)
     app_state.monitor_instance.set_progress_callback(app_state.event_handler.handle_progress_event)
     app_state.monitor_instance.set_steps_callback(app_state.event_handler.handle_steps_event)
-    
+
     app_state.monitor_thread = threading.Thread(target=app_state.monitor_instance.start_monitoring)
     app_state.monitor_thread.daemon = True
     app_state.monitor_thread.start()
@@ -316,11 +308,9 @@ def start_health_monitor():
     if app_state.health_monitor:
         logger.warning("Health monitor already running")
         return
-        
+
     app_state.health_monitor = WorkerHealthMonitor(
-        app_state.monitor_instance,
-        app_state.db_manager,
-        app_state.event_handler
+        app_state.monitor_instance, app_state.db_manager, app_state.event_handler
     )
     app_state.health_monitor.start()
 
@@ -329,14 +319,8 @@ def start_server():
     """Start the FastAPI server."""
     config = Config.from_env()
     app = create_app()
-    
-    uvicorn.run(
-        app,
-        host=config.ws_host,
-        port=config.ws_port,
-        log_level=config.log_level.lower(),
-        reload=False
-    )
+
+    uvicorn.run(app, host=config.ws_host, port=config.ws_port, log_level=config.log_level.lower(), reload=False)
 
 
 app = create_app()

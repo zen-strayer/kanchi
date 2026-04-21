@@ -1,13 +1,12 @@
-from datetime import datetime, timezone
-
 import json
+from datetime import UTC, datetime
 
 from models import TaskEvent
 from utils.payload_sanitizer import (
     PLACEHOLDER_KEY,
     PLACEHOLDER_TRUNCATED,
-    sanitize_payload,
     find_placeholder_paths,
+    sanitize_payload,
 )
 
 
@@ -29,7 +28,7 @@ def test_task_event_handles_ellipsis_in_args():
         task_id="123",
         task_name="demo",
         event_type="task-sent",
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         args=[Ellipsis],
         kwargs={"data": Ellipsis},
     )

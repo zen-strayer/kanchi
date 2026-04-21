@@ -5,7 +5,6 @@ from connection_manager import ConnectionManager
 
 
 class TestConnectionManagerBroadcaster(unittest.IsolatedAsyncioTestCase):
-
     async def test_broadcaster_restarts_after_task_completes_unexpectedly(self):
         """If _broadcast_task is done (not None), start_background_broadcaster must create a new one."""
         manager = ConnectionManager()

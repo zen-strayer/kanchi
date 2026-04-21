@@ -1,18 +1,16 @@
 """Tests for workflow retry action infinite loop prevention."""
 
+import os
+import sys
 import unittest
 import uuid
-from datetime import datetime, timezone
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import Mock, patch
 
-import sys
-import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-from tests.base import DatabaseTestCase
 from services.actions.retry_action import RetryActionHandler
 from services.task_service import TaskService
-from models import ActionResult
+from tests.base import DatabaseTestCase
 
 
 class TestWorkflowRetryLimits(DatabaseTestCase):
@@ -52,22 +50,14 @@ class TestWorkflowRetryLimits(DatabaseTestCase):
         root_id = str(uuid.uuid4())
 
         self.create_task_event_db(
-            task_id=task_id,
-            task_name="tasks.test",
-            event_type="task-failed",
-            root_id=root_id,
-            queue="default"
+            task_id=task_id, task_name="tasks.test", event_type="task-failed", root_id=root_id, queue="default"
         )
 
         current_task_id = task_id
         for i in range(10):
             retry_id = str(uuid.uuid4())
             self.create_task_event_db(
-                task_id=retry_id,
-                task_name="tasks.test",
-                event_type="task-failed",
-                root_id=root_id,
-                queue="default"
+                task_id=retry_id, task_name="tasks.test", event_type="task-failed", root_id=root_id, queue="default"
             )
             self.task_service.create_retry_relationship(current_task_id, retry_id)
             current_task_id = retry_id
@@ -75,9 +65,7 @@ class TestWorkflowRetryLimits(DatabaseTestCase):
         context = {"task_id": current_task_id}
         params = {}
 
-        result = self._run_async(
-            self.retry_handler.execute(context, params)
-        )
+        result = self._run_async(self.retry_handler.execute(context, params))
 
         self.assertEqual(result.status, "failed")
         self.assertIn("Max retry limit reached", result.error_message)
@@ -95,7 +83,7 @@ class TestWorkflowRetryLimits(DatabaseTestCase):
             root_id=root_id,
             queue="default",
             args=[1, 2, 3],
-            kwargs={"foo": "bar"}
+            kwargs={"foo": "bar"},
         )
 
         current_task_id = task_id
@@ -108,7 +96,7 @@ class TestWorkflowRetryLimits(DatabaseTestCase):
                 root_id=root_id,
                 queue="default",
                 args=[1, 2, 3],
-                kwargs={"foo": "bar"}
+                kwargs={"foo": "bar"},
             )
             self.task_service.create_retry_relationship(current_task_id, retry_id)
             current_task_id = retry_id
@@ -116,9 +104,7 @@ class TestWorkflowRetryLimits(DatabaseTestCase):
         context = {"task_id": current_task_id}
         params = {"max_retries": 5}
 
-        result = self._run_async(
-            self.retry_handler.execute(context, params)
-        )
+        result = self._run_async(self.retry_handler.execute(context, params))
 
         self.assertEqual(result.status, "failed")
         self.assertIn("Max retry limit reached", result.error_message)
@@ -140,7 +126,7 @@ class TestWorkflowRetryLimits(DatabaseTestCase):
             root_id=root_id,
             queue="default",
             args=[1, 2, 3],
-            kwargs={"foo": "bar"}
+            kwargs={"foo": "bar"},
         )
 
         current_task_id = task_id
@@ -153,7 +139,7 @@ class TestWorkflowRetryLimits(DatabaseTestCase):
                 root_id=root_id,
                 queue="default",
                 args=[1, 2, 3],
-                kwargs={"foo": "bar"}
+                kwargs={"foo": "bar"},
             )
             self.task_service.create_retry_relationship(current_task_id, retry_id)
             current_task_id = retry_id
@@ -161,9 +147,7 @@ class TestWorkflowRetryLimits(DatabaseTestCase):
         context = {"task_id": current_task_id}
         params = {"max_retries": 5}
 
-        result = self._run_async(
-            self.retry_handler.execute(context, params)
-        )
+        result = self._run_async(self.retry_handler.execute(context, params))
 
         self.assertEqual(result.status, "success")
         self.assertEqual(result.result["retry_count"], 3)
@@ -176,22 +160,14 @@ class TestWorkflowRetryLimits(DatabaseTestCase):
         task_id = str(uuid.uuid4())
 
         self.create_task_event_db(
-            task_id=task_id,
-            task_name="tasks.test",
-            event_type="task-started",
-            root_id=root_id,
-            queue="default"
+            task_id=task_id, task_name="tasks.test", event_type="task-started", root_id=root_id, queue="default"
         )
 
         current_task_id = task_id
         for i in range(4):
             retry_id = str(uuid.uuid4())
             self.create_task_event_db(
-                task_id=retry_id,
-                task_name="tasks.test",
-                event_type="task-failed",
-                root_id=root_id,
-                queue="default"
+                task_id=retry_id, task_name="tasks.test", event_type="task-failed", root_id=root_id, queue="default"
             )
             self.task_service.create_retry_relationship(current_task_id, retry_id)
             current_task_id = retry_id
@@ -205,11 +181,7 @@ class TestWorkflowRetryLimits(DatabaseTestCase):
         task_id = str(uuid.uuid4())
 
         self.create_task_event_db(
-            task_id=task_id,
-            task_name="tasks.test",
-            event_type="task-failed",
-            root_id=None,
-            queue="default"
+            task_id=task_id, task_name="tasks.test", event_type="task-failed", root_id=None, queue="default"
         )
 
         retry_count = self.retry_handler._count_workflow_retries(task_id, None)
@@ -221,22 +193,14 @@ class TestWorkflowRetryLimits(DatabaseTestCase):
         root_id = str(uuid.uuid4())
 
         self.create_task_event_db(
-            task_id=task_id,
-            task_name="tasks.test",
-            event_type="task-failed",
-            root_id=root_id,
-            queue="default"
+            task_id=task_id, task_name="tasks.test", event_type="task-failed", root_id=root_id, queue="default"
         )
 
         current_task_id = task_id
         for i in range(3):
             retry_id = str(uuid.uuid4())
             self.create_task_event_db(
-                task_id=retry_id,
-                task_name="tasks.test",
-                event_type="task-failed",
-                root_id=root_id,
-                queue="default"
+                task_id=retry_id, task_name="tasks.test", event_type="task-failed", root_id=root_id, queue="default"
             )
             self.task_service.create_retry_relationship(current_task_id, retry_id)
             current_task_id = retry_id
@@ -244,9 +208,7 @@ class TestWorkflowRetryLimits(DatabaseTestCase):
         context = {"task_id": current_task_id}
         params = {"max_retries": 3}
 
-        result = self._run_async(
-            self.retry_handler.execute(context, params)
-        )
+        result = self._run_async(self.retry_handler.execute(context, params))
 
         self.assertEqual(result.status, "failed")
         self.assertIn("Max retry limit reached", result.error_message)
@@ -255,13 +217,14 @@ class TestWorkflowRetryLimits(DatabaseTestCase):
         """Test that retry count method handles errors gracefully."""
         task_id = str(uuid.uuid4())
 
-        with patch.object(self.session, 'query', side_effect=Exception("Database error")):
+        with patch.object(self.session, "query", side_effect=Exception("Database error")):
             retry_count = self.retry_handler._count_workflow_retries(task_id, None)
             self.assertEqual(retry_count, 0)
 
     def _run_async(self, coro):
         """Helper to run async functions in tests."""
         import asyncio
+
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
@@ -270,5 +233,5 @@ class TestWorkflowRetryLimits(DatabaseTestCase):
             loop.close()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

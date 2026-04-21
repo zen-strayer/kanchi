@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 PLACEHOLDER_KEY = "__kanchi_placeholder__"
 PLACEHOLDER_TRUNCATED = "celery_payload_truncated"
@@ -16,14 +16,14 @@ PLACEHOLDER_MESSAGE = (
 )
 
 
-def _placeholder() -> Dict[str, str]:
+def _placeholder() -> dict[str, str]:
     return {
         PLACEHOLDER_KEY: PLACEHOLDER_TRUNCATED,
         "message": PLACEHOLDER_MESSAGE,
     }
 
 
-def sanitize_payload(value: Any) -> Tuple[Any, bool]:
+def sanitize_payload(value: Any) -> tuple[Any, bool]:
     """Return a JSON-serializable copy of *value* and flag when we had to truncate."""
 
     truncated = False
@@ -95,7 +95,7 @@ def contains_placeholder(value: Any) -> bool:
     return False
 
 
-def find_placeholder_paths(value: Any, current_path: str = "$") -> List[str]:
+def find_placeholder_paths(value: Any, current_path: str = "$") -> list[str]:
     """
     Return a list of JSON-style paths that contain placeholder nodes.
 
@@ -103,7 +103,7 @@ def find_placeholder_paths(value: Any, current_path: str = "$") -> List[str]:
         value: Payload to inspect
         current_path: Current traversal path (used internally)
     """
-    paths: List[str] = []
+    paths: list[str] = []
 
     if is_placeholder_node(value):
         paths.append(current_path)

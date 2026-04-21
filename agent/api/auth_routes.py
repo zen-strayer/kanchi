@@ -2,8 +2,8 @@
 
 import json
 import logging
-from datetime import datetime, timezone
-from typing import Optional, Iterable, List, Set
+from collections.abc import Iterable
+from datetime import UTC, datetime
 from urllib.parse import urljoin, urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
@@ -20,7 +20,7 @@ from models import (
     RefreshRequest,
     UserInfo,
 )
-from security.auth import AuthError, AuthenticatedUser
+from security.auth import AuthenticatedUser, AuthError
 from services import AuthService
 
 logger = logging.getLogger(__name__)
@@ -119,7 +119,9 @@ def create_router(app_state) -> APIRouter:
         auth_service: AuthService = Depends(require_auth_service),
         current_user: AuthenticatedUser | None = Depends(optional_authenticated_user),
     ):
-        session_id = payload.session_id or (current_user.session_id if isinstance(current_user, AuthenticatedUser) else None)
+        session_id = payload.session_id or (
+            current_user.session_id if isinstance(current_user, AuthenticatedUser) else None
+        )
         if not session_id:
             raise HTTPException(status_code=400, detail="Session ID required to logout")
 
@@ -150,8 +152,8 @@ def create_router(app_state) -> APIRouter:
     @router.get("/oauth/{provider}/authorize")
     async def oauth_authorize(  # type: ignore[override]
         provider: str,
-        redirect_to: Optional[str] = Query(default=None),
-        session_id: Optional[str] = Query(default=None),
+        redirect_to: str | None = Query(default=None),
+        session_id: str | None = Query(default=None),
         auth_service: AuthService = Depends(require_auth_service),
     ):
         try:
@@ -169,10 +171,10 @@ def create_router(app_state) -> APIRouter:
     async def oauth_callback(  # type: ignore[override]
         provider: str,
         request: Request,
-        code: Optional[str] = Query(default=None),
-        state: Optional[str] = Query(default=None),
-        error: Optional[str] = Query(default=None),
-        session_id: Optional[str] = Query(default=None),
+        code: str | None = Query(default=None),
+        state: str | None = Query(default=None),
+        error: str | None = Query(default=None),
+        session_id: str | None = Query(default=None),
         auth_service: AuthService = Depends(require_auth_service),
     ):
         config = get_config()
@@ -224,7 +226,7 @@ def _login_result_to_response(result) -> LoginResponse:
 
 
 def _login_result_to_dict(result) -> dict:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     access_expires_in = max(0, int((result.access_token_expires_at - now).total_seconds()))
     refresh_expires_in = max(0, int((result.refresh_token_expires_at - now).total_seconds()))
 
@@ -248,7 +250,7 @@ def _login_result_to_dict(result) -> dict:
     }
 
 
-def _oauth_error_response(message: str, allowed_origins: List[str]) -> HTMLResponse:
+def _oauth_error_response(message: str, allowed_origins: list[str]) -> HTMLResponse:
     html_content = _build_oauth_callback_html({"error": message}, redirect="", allowed_origins=allowed_origins)
     return HTMLResponse(status_code=400, content=html_content)
 
@@ -314,7 +316,7 @@ def _build_oauth_callback_html(payload: dict, redirect: str, allowed_origins: It
 </html>"""
 
 
-def _resolve_redirect_target(redirect_to: Optional[str], config: Config, request: Request) -> str:
+def _resolve_redirect_target(redirect_to: str | None, config: Config, request: Request) -> str:
     """Return an absolute redirect target or empty string when unavailable."""
     if not redirect_to:
         return config.oauth_redirect_base_url or ""
@@ -326,9 +328,9 @@ def _resolve_redirect_target(redirect_to: Optional[str], config: Config, request
     return redirect_to
 
 
-def _resolve_post_message_origins(config: Config, redirect_target: Optional[str], request: Request) -> List[str]:
+def _resolve_post_message_origins(config: Config, redirect_target: str | None, request: Request) -> list[str]:
     """Build a deterministic list of origins we allow for postMessage targets."""
-    origins: Set[str] = set()
+    origins: set[str] = set()
 
     request_origin = f"{request.url.scheme}://{request.url.netloc}"
     origins.add(request_origin)
@@ -351,7 +353,7 @@ def _resolve_post_message_origins(config: Config, redirect_target: Optional[str]
     return sorted(origins)
 
 
-def _extract_origin(value: str) -> Optional[str]:
+def _extract_origin(value: str) -> str | None:
     """Extract the scheme/host pair from a URL-like string."""
     if not value:
         return None

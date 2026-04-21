@@ -1,19 +1,17 @@
 """Service for managing daily task statistics."""
 
 import logging
-from datetime import datetime, timezone, date
-from typing import List, Optional
+from datetime import UTC, date, datetime
+
 from sqlalchemy.orm import Session
-from sqlalchemy import func
 
 from database import TaskDailyStatsDB
-from models import TaskEvent, TaskDailyStatsResponse
+from models import TaskDailyStatsResponse, TaskEvent
 
 logger = logging.getLogger(__name__)
 
 
 class DailyStatsService:
-
     def __init__(self, session: Session):
         self.session = session
 
@@ -21,10 +19,11 @@ class DailyStatsService:
         event_date = task_event.timestamp.date()
         task_name = task_event.task_name
 
-        stats = self.session.query(TaskDailyStatsDB).filter(
-            TaskDailyStatsDB.task_name == task_name,
-            TaskDailyStatsDB.date == event_date
-        ).first()
+        stats = (
+            self.session.query(TaskDailyStatsDB)
+            .filter(TaskDailyStatsDB.task_name == task_name, TaskDailyStatsDB.date == event_date)
+            .first()
+        )
 
         if not stats:
             stats = TaskDailyStatsDB(
@@ -38,26 +37,26 @@ class DailyStatsService:
                 revoked=0,
                 orphaned=0,
                 first_execution=task_event.timestamp,
-                last_execution=task_event.timestamp
+                last_execution=task_event.timestamp,
             )
             self.session.add(stats)
 
         event_type = task_event.event_type
 
-        if event_type == 'task-received':
+        if event_type == "task-received":
             stats.total_executions += 1
             stats.pending += 1
-        elif event_type == 'task-succeeded':
+        elif event_type == "task-succeeded":
             stats.succeeded += 1
             if stats.pending > 0:
                 stats.pending -= 1
-        elif event_type == 'task-failed':
+        elif event_type == "task-failed":
             stats.failed += 1
             if stats.pending > 0:
                 stats.pending -= 1
-        elif event_type == 'task-retried':
+        elif event_type == "task-retried":
             stats.retried += 1
-        elif event_type == 'task-revoked':
+        elif event_type == "task-revoked":
             stats.revoked += 1
             if stats.pending > 0:
                 stats.pending -= 1
@@ -70,14 +69,14 @@ class DailyStatsService:
 
         event_ts = task_event.timestamp
         if event_ts.tzinfo is None:
-            event_ts = event_ts.replace(tzinfo=timezone.utc)
+            event_ts = event_ts.replace(tzinfo=UTC)
 
         if stats.first_execution is None:
             stats.first_execution = event_ts
         else:
             first_exec = stats.first_execution
             if first_exec.tzinfo is None:
-                first_exec = first_exec.replace(tzinfo=timezone.utc)
+                first_exec = first_exec.replace(tzinfo=UTC)
             if event_ts < first_exec:
                 stats.first_execution = event_ts
 
@@ -86,11 +85,11 @@ class DailyStatsService:
         else:
             last_exec = stats.last_execution
             if last_exec.tzinfo is None:
-                last_exec = last_exec.replace(tzinfo=timezone.utc)
+                last_exec = last_exec.replace(tzinfo=UTC)
             if event_ts > last_exec:
                 stats.last_execution = event_ts
 
-        stats.updated_at = datetime.now(timezone.utc)
+        stats.updated_at = datetime.now(UTC)
 
         try:
             self.session.commit()
@@ -118,12 +117,8 @@ class DailyStatsService:
             stats.avg_runtime = stats.avg_runtime + (runtime - stats.avg_runtime) / n
 
     def get_daily_stats(
-        self,
-        task_name: str,
-        start_date: Optional[date] = None,
-        end_date: Optional[date] = None,
-        limit: int = 30
-    ) -> List[TaskDailyStatsResponse]:
+        self, task_name: str, start_date: date | None = None, end_date: date | None = None, limit: int = 30
+    ) -> list[TaskDailyStatsResponse]:
         """
         Get daily statistics for a task within a date range.
 
@@ -133,9 +128,7 @@ class DailyStatsService:
             end_date: Optional end date (inclusive)
             limit: Maximum number of days to return (default: 30)
         """
-        query = self.session.query(TaskDailyStatsDB).filter(
-            TaskDailyStatsDB.task_name == task_name
-        )
+        query = self.session.query(TaskDailyStatsDB).filter(TaskDailyStatsDB.task_name == task_name)
 
         if start_date:
             query = query.filter(TaskDailyStatsDB.date >= start_date)
@@ -145,37 +138,30 @@ class DailyStatsService:
         stats = query.order_by(TaskDailyStatsDB.date.desc()).limit(limit).all()
         return [TaskDailyStatsResponse.model_validate(s) for s in stats]
 
-    def get_stats_for_date(
-        self,
-        task_name: str,
-        target_date: date
-    ) -> Optional[TaskDailyStatsResponse]:
+    def get_stats_for_date(self, task_name: str, target_date: date) -> TaskDailyStatsResponse | None:
         """Get statistics for a specific task on a specific date."""
-        stats = self.session.query(TaskDailyStatsDB).filter(
-            TaskDailyStatsDB.task_name == task_name,
-            TaskDailyStatsDB.date == target_date
-        ).first()
+        stats = (
+            self.session.query(TaskDailyStatsDB)
+            .filter(TaskDailyStatsDB.task_name == task_name, TaskDailyStatsDB.date == target_date)
+            .first()
+        )
 
         if stats:
             return TaskDailyStatsResponse.model_validate(stats)
         return None
 
-    def get_all_tasks_stats_for_date(
-        self,
-        target_date: date
-    ) -> List[TaskDailyStatsResponse]:
+    def get_all_tasks_stats_for_date(self, target_date: date) -> list[TaskDailyStatsResponse]:
         """Get statistics for all tasks on a specific date."""
-        stats = self.session.query(TaskDailyStatsDB).filter(
-            TaskDailyStatsDB.date == target_date
-        ).order_by(TaskDailyStatsDB.total_executions.desc()).all()
+        stats = (
+            self.session.query(TaskDailyStatsDB)
+            .filter(TaskDailyStatsDB.date == target_date)
+            .order_by(TaskDailyStatsDB.total_executions.desc())
+            .all()
+        )
 
         return [TaskDailyStatsResponse.model_validate(s) for s in stats]
 
-    def get_task_trend_summary(
-        self,
-        task_name: str,
-        days: int = 7
-    ) -> dict:
+    def get_task_trend_summary(self, task_name: str, days: int = 7) -> dict:
         """
         Get a summary of trends for a task over the last N days.
 
@@ -186,19 +172,20 @@ class DailyStatsService:
         - Average runtime trend
         """
         from datetime import timedelta
-        end_date = datetime.now(timezone.utc).date()
+
+        end_date = datetime.now(UTC).date()
         start_date = end_date - timedelta(days=days - 1)
 
         stats = self.get_daily_stats(task_name, start_date, end_date, limit=days)
 
         if not stats:
             return {
-                'task_name': task_name,
-                'days': days,
-                'total_executions': 0,
-                'avg_success_rate': 0,
-                'avg_failure_rate': 0,
-                'avg_runtime': None
+                "task_name": task_name,
+                "days": days,
+                "total_executions": 0,
+                "avg_success_rate": 0,
+                "avg_failure_rate": 0,
+                "avg_runtime": None,
             }
 
         total_executions = sum(s.total_executions for s in stats)
@@ -212,14 +199,14 @@ class DailyStatsService:
         failure_rate = (total_failed / total_executions * 100) if total_executions > 0 else 0
 
         return {
-            'task_name': task_name,
-            'days': days,
-            'start_date': start_date.isoformat(),
-            'end_date': end_date.isoformat(),
-            'total_executions': total_executions,
-            'total_succeeded': total_succeeded,
-            'total_failed': total_failed,
-            'avg_success_rate': round(success_rate, 2),
-            'avg_failure_rate': round(failure_rate, 2),
-            'avg_runtime': avg_runtime
+            "task_name": task_name,
+            "days": days,
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+            "total_executions": total_executions,
+            "total_succeeded": total_succeeded,
+            "total_failed": total_failed,
+            "avg_success_rate": round(success_rate, 2),
+            "avg_failure_rate": round(failure_rate, 2),
+            "avg_runtime": avg_runtime,
         }

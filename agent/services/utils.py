@@ -1,9 +1,11 @@
 """Shared utilities for service layer."""
 
 import logging
-from typing import List, Optional, Callable, Any
-from sqlalchemy.orm import Query
+from collections.abc import Callable
+from typing import Any
+
 from sqlalchemy import or_
+from sqlalchemy.orm import Query
 
 from database import TaskEventDB
 
@@ -33,16 +35,16 @@ class EnvironmentFilter:
         if active_env.queue_patterns:
             queue_conditions = []
             for pattern in active_env.queue_patterns:
-                sql_pattern = pattern.replace('*', '%').replace('?', '_')
-                queue_conditions.append(getattr(model, 'queue').like(sql_pattern))
+                sql_pattern = pattern.replace("*", "%").replace("?", "_")
+                queue_conditions.append(model.queue.like(sql_pattern))
             if queue_conditions:
                 conditions.append(or_(*queue_conditions))
 
         if active_env.worker_patterns:
             worker_conditions = []
             for pattern in active_env.worker_patterns:
-                sql_pattern = pattern.replace('*', '%').replace('?', '_')
-                worker_conditions.append(getattr(model, 'hostname').like(sql_pattern))
+                sql_pattern = pattern.replace("*", "%").replace("?", "_")
+                worker_conditions.append(model.hostname.like(sql_pattern))
             if worker_conditions:
                 conditions.append(or_(*worker_conditions))
 
@@ -55,15 +57,11 @@ class EnvironmentFilter:
 class GenericFilter:
     """Generic filter application with operator support."""
 
-    VALID_OPERATORS = ['is', 'not', 'contains', 'starts', 'in', 'not_in']
+    VALID_OPERATORS = ["is", "not", "contains", "starts", "in", "not_in"]
 
     @staticmethod
     def apply(
-        query: Query,
-        column,
-        operator: str,
-        values: List[str],
-        value_mapper: Optional[Callable[[str], Any]] = None
+        query: Query, column, operator: str, values: list[str], value_mapper: Callable[[str], Any] | None = None
     ) -> Query:
         """
         Apply a filter to a query with operator support.
@@ -86,24 +84,24 @@ class GenericFilter:
             if not values:
                 return query
 
-        if operator in ['is', '']:
+        if operator in ["is", ""]:
             return query.filter(column == values[0])
-        elif operator == 'not':
+        elif operator == "not":
             return query.filter(column != values[0])
-        elif operator == 'contains':
+        elif operator == "contains":
             return query.filter(column.ilike(f"%{values[0]}%"))
-        elif operator == 'starts':
+        elif operator == "starts":
             return query.filter(column.ilike(f"{values[0]}%"))
-        elif operator == 'in':
+        elif operator == "in":
             return query.filter(column.in_(values))
-        elif operator == 'not_in':
+        elif operator == "not_in":
             return query.filter(~column.in_(values))
 
         logger.warning(f"Unknown operator '{operator}', returning unmodified query")
         return query
 
 
-def parse_filter_string(filters_str: str) -> List[dict]:
+def parse_filter_string(filters_str: str) -> list[dict]:
     """
     Parse filter string into structured filter objects.
 
@@ -122,35 +120,31 @@ def parse_filter_string(filters_str: str) -> List[dict]:
         return []
 
     parsed = []
-    filter_parts = filters_str.split(';')
+    filter_parts = filters_str.split(";")
 
     for part in filter_parts:
         part = part.strip()
         if not part:
             continue
 
-        segments = part.split(':', 2)
+        segments = part.split(":", 2)
         if len(segments) < 2:
             continue
 
         field = segments[0].strip().lower()
 
         if len(segments) == 2:
-            operator = 'is'
+            operator = "is"
             value_str = segments[1].strip()
         else:
             operator = segments[1].strip().lower()
             value_str = segments[2].strip()
 
-        if operator in ['in', 'not_in']:
-            values = [v.strip() for v in value_str.split(',') if v.strip()]
+        if operator in ["in", "not_in"]:
+            values = [v.strip() for v in value_str.split(",") if v.strip()]
         else:
             values = [value_str]
 
-        parsed.append({
-            'field': field,
-            'operator': operator,
-            'values': values
-        })
+        parsed.append({"field": field, "operator": operator, "values": values})
 
     return parsed

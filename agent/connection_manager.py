@@ -1,6 +1,5 @@
 import asyncio
 import logging
-from typing import Dict, List, Optional
 
 from fastapi import WebSocket
 
@@ -11,13 +10,13 @@ logger = logging.getLogger(__name__)
 
 class ConnectionManager:
     def __init__(self):
-        self.active_connections: List[WebSocket] = []
-        self.client_filters: Dict[WebSocket, dict] = {}
-        self.client_modes: Dict[WebSocket, str] = {}
-        self.message_queue: Optional[asyncio.Queue] = None
+        self.active_connections: list[WebSocket] = []
+        self.client_filters: dict[WebSocket, dict] = {}
+        self.client_modes: dict[WebSocket, str] = {}
+        self.message_queue: asyncio.Queue | None = None
         self._broadcast_task = None
         self._running = False
-        self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._loop: asyncio.AbstractEventLoop | None = None
 
     def start_background_broadcaster(self):
         task_inactive = self._broadcast_task is None or self._broadcast_task.done()
@@ -32,10 +31,7 @@ class ConnectionManager:
         while self._running:
             try:
                 try:
-                    message_type, data = await asyncio.wait_for(
-                        self.message_queue.get(),
-                        timeout=0.1
-                    )
+                    message_type, data = await asyncio.wait_for(self.message_queue.get(), timeout=0.1)
 
                     if message_type == "task":
                         await self._broadcast_task_event(data)
@@ -44,7 +40,7 @@ class ConnectionManager:
                     elif message_type == "progress":
                         await self._broadcast_progress_event(data)
 
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     continue
 
             except Exception as e:
@@ -93,9 +89,7 @@ class ConnectionManager:
     def _queue_event(self, event_type: str, event):
         if self.active_connections and self._loop and self.message_queue:
             try:
-                self._loop.call_soon_threadsafe(
-                    self.message_queue.put_nowait, (event_type, event)
-                )
+                self._loop.call_soon_threadsafe(self.message_queue.put_nowait, (event_type, event))
             except Exception as e:
                 logger.error(f"Error queuing {event_type} event: {e}", exc_info=True)
 

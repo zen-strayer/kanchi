@@ -1,21 +1,15 @@
 """Workflow engine for evaluating and executing workflows."""
 
-import logging
 import asyncio
+import logging
 import re
 import threading
-from typing import Dict, Any
+from typing import Any
 
-from models import (
-    TaskEvent,
-    WorkerEvent,
-    WorkflowDefinition,
-    Condition,
-    ConditionOperator
-)
-from services.workflow_service import WorkflowService
+from models import Condition, ConditionOperator, TaskEvent, WorkerEvent, WorkflowDefinition
+from services.workflow_catalog import EVENT_TRIGGER_MAP
 from services.workflow_executor import WorkflowExecutor
-from services.workflow_catalog import EVENT_TRIGGER_MAP, TRIGGER_METADATA
+from services.workflow_service import WorkflowService
 
 logger = logging.getLogger(__name__)
 
@@ -43,9 +37,7 @@ class WorkflowEngine:
             context = event.model_dump()
 
             thread = threading.Thread(
-                target=self._run_async_workflow_evaluation,
-                args=(trigger_type, context, event),
-                daemon=True
+                target=self._run_async_workflow_evaluation, args=(trigger_type, context, event), daemon=True
             )
             thread.start()
 
@@ -53,10 +45,7 @@ class WorkflowEngine:
             logger.error(f"Error processing event for workflows: {e}", exc_info=True)
 
     def _run_async_workflow_evaluation(
-        self,
-        trigger_type: str,
-        context: Dict[str, Any],
-        event: TaskEvent | WorkerEvent
+        self, trigger_type: str, context: dict[str, Any], event: TaskEvent | WorkerEvent
     ):
         """Run async workflow evaluation in a new event loop."""
         try:
@@ -65,10 +54,7 @@ class WorkflowEngine:
             logger.error(f"Error running workflow evaluation: {e}", exc_info=True)
 
     async def _evaluate_and_execute_workflows(
-        self,
-        trigger_type: str,
-        context: Dict[str, Any],
-        event: TaskEvent | WorkerEvent
+        self, trigger_type: str, context: dict[str, Any], event: TaskEvent | WorkerEvent
     ):
         """Evaluate and execute matching workflows (async)."""
         with self.db_manager.get_session() as session:
@@ -98,9 +84,7 @@ class WorkflowEngine:
                     cb_state = workflow_service.is_circuit_breaker_open(workflow, context)
 
                     if cb_state.is_open:
-                        logger.warning(
-                            f"Circuit breaker skipped workflow {workflow.name}: {cb_state.reason}"
-                        )
+                        logger.warning(f"Circuit breaker skipped workflow {workflow.name}: {cb_state.reason}")
                         workflow_service.record_circuit_breaker_skip(
                             workflow=workflow,
                             trigger_type=trigger_type,
@@ -112,55 +96,33 @@ class WorkflowEngine:
                         continue
 
                     executor = WorkflowExecutor(
-                        session=session,
-                        db_manager=self.db_manager,
-                        monitor_instance=self.monitor_instance
+                        session=session, db_manager=self.db_manager, monitor_instance=self.monitor_instance
                     )
 
-                    await executor.execute_workflow(
-                        workflow,
-                        context,
-                        event,
-                        circuit_breaker_key=cb_state.key
-                    )
+                    await executor.execute_workflow(workflow, context, event, circuit_breaker_key=cb_state.key)
 
                 except Exception as e:
                     logger.error(f"Error evaluating workflow {workflow.name}: {e}", exc_info=True)
 
-    def _evaluate_conditions(
-        self,
-        workflow: WorkflowDefinition,
-        context: Dict[str, Any]
-    ) -> bool:
+    def _evaluate_conditions(self, workflow: WorkflowDefinition, context: dict[str, Any]) -> bool:
         if not workflow.conditions:
             return True
 
         return self._evaluate_condition_group(workflow.conditions, context)
 
-    def _evaluate_condition_group(
-        self,
-        condition_group,
-        context: Dict[str, Any]
-    ) -> bool:
+    def _evaluate_condition_group(self, condition_group, context: dict[str, Any]) -> bool:
         """Evaluate a group of conditions with AND/OR logic."""
         if not condition_group.conditions:
             return True
 
-        results = [
-            self._evaluate_single_condition(cond, context)
-            for cond in condition_group.conditions
-        ]
+        results = [self._evaluate_single_condition(cond, context) for cond in condition_group.conditions]
 
         if condition_group.operator == "AND":
             return all(results)
         else:  # OR
             return any(results)
 
-    def _evaluate_single_condition(
-        self,
-        condition: Condition,
-        context: Dict[str, Any]
-    ) -> bool:
+    def _evaluate_single_condition(self, condition: Condition, context: dict[str, Any]) -> bool:
         """Evaluate a single condition."""
         field_value = context.get(condition.field)
 

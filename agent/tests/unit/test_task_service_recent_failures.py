@@ -1,38 +1,28 @@
 import unittest
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 
 from services.task_service import TaskService
 from tests.base import DatabaseTestCase
 
 
 class TestTaskServiceRecentFailedTasks(DatabaseTestCase):
-
     def setUp(self):
         super().setUp()
         self.service = TaskService(self.session)
-        self.now = datetime.now(timezone.utc)
+        self.now = datetime.now(UTC)
 
     def test_returns_only_recent_failed_tasks(self):
         recent_failure_time = self.now - timedelta(hours=1)
         old_failure_time = self.now - timedelta(hours=48)
 
         self.create_task_event_db(
-            task_id="failed-recent",
-            task_name="tasks.example",
-            event_type="task-failed",
-            timestamp=recent_failure_time
+            task_id="failed-recent", task_name="tasks.example", event_type="task-failed", timestamp=recent_failure_time
         )
         self.create_task_event_db(
-            task_id="failed-old",
-            task_name="tasks.example",
-            event_type="task-failed",
-            timestamp=old_failure_time
+            task_id="failed-old", task_name="tasks.example", event_type="task-failed", timestamp=old_failure_time
         )
         self.create_task_event_db(
-            task_id="succeeded-recent",
-            task_name="tasks.example",
-            event_type="task-succeeded",
-            timestamp=self.now
+            task_id="succeeded-recent", task_name="tasks.example", event_type="task-succeeded", timestamp=self.now
         )
 
         results = self.service.get_recent_failed_tasks(hours=24, limit=10)
@@ -49,7 +39,7 @@ class TestTaskServiceRecentFailedTasks(DatabaseTestCase):
             event_type="task-failed",
             timestamp=recent_time,
             has_retries=False,
-            retried_by=None
+            retried_by=None,
         )
         self.create_task_event_db(
             task_id="failed-retried",
@@ -57,7 +47,7 @@ class TestTaskServiceRecentFailedTasks(DatabaseTestCase):
             event_type="task-failed",
             timestamp=recent_time - timedelta(minutes=1),
             has_retries=True,
-            retried_by='["child-task"]'
+            retried_by='["child-task"]',
         )
 
         results = self.service.get_recent_failed_tasks(hours=24)
@@ -66,10 +56,7 @@ class TestTaskServiceRecentFailedTasks(DatabaseTestCase):
         self.assertIn("failed-unretried", task_ids)
         self.assertNotIn("failed-retried", task_ids)
 
-        results_including_retried = self.service.get_recent_failed_tasks(
-            hours=24,
-            exclude_retried=False
-        )
+        results_including_retried = self.service.get_recent_failed_tasks(hours=24, exclude_retried=False)
         task_ids_including = {task.task_id for task in results_including_retried}
 
         self.assertIn("failed-retried", task_ids_including)
@@ -80,7 +67,7 @@ class TestTaskServiceRecentFailedTasks(DatabaseTestCase):
                 task_id=f"failed-{index}",
                 task_name="tasks.example",
                 event_type="task-failed",
-                timestamp=self.now - timedelta(hours=index)
+                timestamp=self.now - timedelta(hours=index),
             )
 
         results = self.service.get_recent_failed_tasks(hours=24, limit=2)

@@ -1,15 +1,14 @@
 """API routes for environment management."""
 
 import logging
-from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from models import EnvironmentResponse, EnvironmentCreate, EnvironmentUpdate
-from services import EnvironmentService
 from config import Config
+from models import EnvironmentCreate, EnvironmentResponse, EnvironmentUpdate
 from security.dependencies import get_auth_dependency
+from services import EnvironmentService
 
 logger = logging.getLogger(__name__)
 
@@ -32,10 +31,7 @@ def create_router(app_state) -> APIRouter:
             yield session
 
     @router.post("", response_model=EnvironmentResponse, status_code=201)
-    async def create_environment(
-        env_create: EnvironmentCreate,
-        session: Session = Depends(get_db)
-    ):
+    async def create_environment(env_create: EnvironmentCreate, session: Session = Depends(get_db)):
         """Create a new environment."""
         try:
             service = EnvironmentService(session)
@@ -44,7 +40,7 @@ def create_router(app_state) -> APIRouter:
             logger.error(f"Error creating environment: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail=str(e))
 
-    @router.get("", response_model=List[EnvironmentResponse])
+    @router.get("", response_model=list[EnvironmentResponse])
     async def list_environments(session: Session = Depends(get_db)):
         """List all environments."""
         try:
@@ -70,11 +66,7 @@ def create_router(app_state) -> APIRouter:
             raise HTTPException(status_code=500, detail=str(e))
 
     @router.patch("/{env_id}", response_model=EnvironmentResponse)
-    async def update_environment(
-        env_id: str,
-        env_update: EnvironmentUpdate,
-        session: Session = Depends(get_db)
-    ):
+    async def update_environment(env_id: str, env_update: EnvironmentUpdate, session: Session = Depends(get_db)):
         """Update an environment."""
         try:
             service = EnvironmentService(session)
@@ -94,10 +86,7 @@ def create_router(app_state) -> APIRouter:
         try:
             service = EnvironmentService(session)
             if not service.delete_environment(env_id):
-                raise HTTPException(
-                    status_code=400,
-                    detail="Cannot delete environment (not found)"
-                )
+                raise HTTPException(status_code=400, detail="Cannot delete environment (not found)")
         except HTTPException:
             raise
         except Exception as e:

@@ -1,22 +1,15 @@
 """Task registry service for auto-discovery and management of Celery tasks."""
 
 import logging
-import uuid
 import threading
-from datetime import datetime, timezone, timedelta
-from typing import List, Optional, Dict, Any
+import uuid
+from datetime import UTC, datetime, timedelta
 
+from sqlalchemy import String, and_, case, cast, func
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, or_, cast, String, case
 
-from database import TaskRegistryDB, TaskEventDB, RetryRelationshipDB
-from models import (
-    TaskRegistryResponse,
-    TaskRegistryUpdate,
-    TaskRegistryStats,
-    TaskTimelineResponse,
-    TimelineBucket
-)
+from database import RetryRelationshipDB, TaskEventDB, TaskRegistryDB
+from models import TaskRegistryResponse, TaskRegistryStats, TaskRegistryUpdate, TaskTimelineResponse, TimelineBucket
 from services.utils import EnvironmentFilter
 
 logger = logging.getLogger(__name__)
@@ -47,9 +40,7 @@ class TaskRegistryService:
         try:
             task_names = self.session.query(TaskRegistryDB.name).all()
             TaskRegistryService._cache = {name[0] for name in task_names}
-            logger.info(
-                f"Task registry cache initialized with {len(TaskRegistryService._cache)} tasks"
-            )
+            logger.info(f"Task registry cache initialized with {len(TaskRegistryService._cache)} tasks")
         except Exception as e:
             logger.error(f"Error loading task registry cache: {e}", exc_info=True)
             TaskRegistryService._cache = set()
@@ -76,11 +67,7 @@ class TaskRegistryService:
                 logger.warning(f"Failed to update last_seen for {task_name}: {e}")
             return None
 
-        existing_task = (
-            self.session.query(TaskRegistryDB)
-            .filter(TaskRegistryDB.name == task_name)
-            .first()
-        )
+        existing_task = self.session.query(TaskRegistryDB).filter(TaskRegistryDB.name == task_name).first()
 
         if existing_task:
             with TaskRegistryService._cache_lock:
@@ -95,11 +82,7 @@ class TaskRegistryService:
         logger.info(f"Auto-discovered new task: '{task_name}'")
         return new_task
 
-    def list_tasks(
-        self,
-        tag: Optional[str] = None,
-        name_filter: Optional[str] = None
-    ) -> List[TaskRegistryResponse]:
+    def list_tasks(self, tag: str | None = None, name_filter: str | None = None) -> list[TaskRegistryResponse]:
         """
         List all registered tasks with optional filters.
 
@@ -113,7 +96,7 @@ class TaskRegistryService:
         query = self.session.query(TaskRegistryDB)
 
         if name_filter:
-            query = query.filter(TaskRegistryDB.name.ilike(f'%{name_filter}%'))
+            query = query.filter(TaskRegistryDB.name.ilike(f"%{name_filter}%"))
 
         if tag:
             query = query.filter(cast(TaskRegistryDB.tags, String).contains(f'"{tag}"'))
@@ -121,7 +104,7 @@ class TaskRegistryService:
         tasks = query.order_by(TaskRegistryDB.last_seen.desc()).all()
         return [TaskRegistryResponse.model_validate(task) for task in tasks]
 
-    def get_task(self, task_name: str) -> Optional[TaskRegistryResponse]:
+    def get_task(self, task_name: str) -> TaskRegistryResponse | None:
         """
         Get a specific task by name.
 
@@ -131,21 +114,13 @@ class TaskRegistryService:
         Returns:
             TaskRegistryResponse or None if not found
         """
-        task = (
-            self.session.query(TaskRegistryDB)
-            .filter(TaskRegistryDB.name == task_name)
-            .first()
-        )
+        task = self.session.query(TaskRegistryDB).filter(TaskRegistryDB.name == task_name).first()
 
         if task:
             return TaskRegistryResponse.model_validate(task)
         return None
 
-    def update_task(
-        self,
-        task_name: str,
-        update_data: TaskRegistryUpdate
-    ) -> Optional[TaskRegistryResponse]:
+    def update_task(self, task_name: str, update_data: TaskRegistryUpdate) -> TaskRegistryResponse | None:
         """
         Update task metadata (human_readable_name, description, tags).
 
@@ -160,11 +135,7 @@ class TaskRegistryService:
             Exception: If database operation fails
         """
         try:
-            task = (
-                self.session.query(TaskRegistryDB)
-                .filter(TaskRegistryDB.name == task_name)
-                .first()
-            )
+            task = self.session.query(TaskRegistryDB).filter(TaskRegistryDB.name == task_name).first()
 
             if not task:
                 return None
@@ -178,7 +149,7 @@ class TaskRegistryService:
             if update_data.tags is not None:
                 task.tags = update_data.tags
 
-            task.updated_at = datetime.now(timezone.utc)
+            task.updated_at = datetime.now(UTC)
 
             self.session.commit()
             return TaskRegistryResponse.model_validate(task)
@@ -188,11 +159,7 @@ class TaskRegistryService:
             logger.error(f"Failed to update task {task_name}: {e}")
             raise
 
-    def get_task_stats(
-        self,
-        task_name: str,
-        hours: int = 24
-    ) -> TaskRegistryStats:
+    def get_task_stats(self, task_name: str, hours: int = 24) -> TaskRegistryStats:
         """
         Get statistics for a specific task over the last N hours.
         Uses database aggregation for optimal performance.
@@ -204,39 +171,27 @@ class TaskRegistryService:
         Returns:
             TaskRegistryStats object with execution statistics
         """
-        since = datetime.now(timezone.utc) - timedelta(hours=hours)
+        since = datetime.now(UTC) - timedelta(hours=hours)
 
         base_query = self.session.query(TaskEventDB).filter(
-            and_(
-                TaskEventDB.task_name == task_name,
-                TaskEventDB.timestamp >= since
-            )
+            and_(TaskEventDB.task_name == task_name, TaskEventDB.timestamp >= since)
         )
 
         base_query = EnvironmentFilter.apply(base_query, self.active_env)
 
         stats_query = base_query.with_entities(
-            func.count(func.distinct(TaskEventDB.task_id)).label('total_executions'),
-            func.sum(
-                case((TaskEventDB.event_type == 'task-succeeded', 1), else_=0)
-            ).label('succeeded'),
-            func.sum(
-                case((TaskEventDB.event_type == 'task-received', 1), else_=0)
-            ).label('pending'),
-            func.sum(
-                case((TaskEventDB.event_type == 'task-retried', 1), else_=0)
-            ).label('retried'),
-            func.avg(
-                case((TaskEventDB.runtime.isnot(None), TaskEventDB.runtime), else_=None)
-            ).label('avg_runtime'),
-            func.max(TaskEventDB.timestamp).label('last_execution')
+            func.count(func.distinct(TaskEventDB.task_id)).label("total_executions"),
+            func.sum(case((TaskEventDB.event_type == "task-succeeded", 1), else_=0)).label("succeeded"),
+            func.sum(case((TaskEventDB.event_type == "task-received", 1), else_=0)).label("pending"),
+            func.sum(case((TaskEventDB.event_type == "task-retried", 1), else_=0)).label("retried"),
+            func.avg(case((TaskEventDB.runtime.isnot(None), TaskEventDB.runtime), else_=None)).label("avg_runtime"),
+            func.max(TaskEventDB.timestamp).label("last_execution"),
         )
 
         result = stats_query.one()
 
         failed_task_ids = (
-            base_query
-            .filter(TaskEventDB.event_type == 'task-failed')
+            base_query.filter(TaskEventDB.event_type == "task-failed")
             .with_entities(TaskEventDB.task_id)
             .distinct()
             .all()
@@ -247,14 +202,10 @@ class TaskRegistryService:
             unretried_failures = 0
         else:
             retry_relationships = (
-                self.session.query(RetryRelationshipDB)
-                .filter(RetryRelationshipDB.task_id.in_(failed_task_ids))
-                .all()
+                self.session.query(RetryRelationshipDB).filter(RetryRelationshipDB.task_id.in_(failed_task_ids)).all()
             )
 
-            retried_task_ids = {
-                rel.task_id for rel in retry_relationships if rel.total_retries > 0
-            }
+            retried_task_ids = {rel.task_id for rel in retry_relationships if rel.total_retries > 0}
 
             unretried_failures = len(failed_task_ids - retried_task_ids)
 
@@ -266,10 +217,10 @@ class TaskRegistryService:
             pending=result.pending or 0,
             retried=result.retried or 0,
             avg_runtime=float(result.avg_runtime) if result.avg_runtime else None,
-            last_execution=result.last_execution
+            last_execution=result.last_execution,
         )
 
-    def get_all_tags(self) -> List[str]:
+    def get_all_tags(self) -> list[str]:
         """
         Get all unique tags across all tasks.
 
@@ -285,12 +236,7 @@ class TaskRegistryService:
 
         return sorted(list(all_tags))
 
-    def get_task_timeline(
-        self,
-        task_name: str,
-        hours: int = 24,
-        bucket_size_minutes: int = 60
-    ) -> TaskTimelineResponse:
+    def get_task_timeline(self, task_name: str, hours: int = 24, bucket_size_minutes: int = 60) -> TaskTimelineResponse:
         """
         Get execution timeline with time buckets for visualizing task frequency.
         Uses database aggregation for optimal performance.
@@ -303,7 +249,7 @@ class TaskRegistryService:
         Returns:
             TaskTimelineResponse with bucketed execution counts
         """
-        end_time = datetime.now(timezone.utc)
+        end_time = datetime.now(UTC)
         start_time = end_time - timedelta(hours=hours)
         bucket_seconds = bucket_size_minutes * 60
         num_buckets = int((hours * 60) / bucket_size_minutes)
@@ -312,72 +258,53 @@ class TaskRegistryService:
             and_(
                 TaskEventDB.task_name == task_name,
                 TaskEventDB.timestamp >= start_time,
-                TaskEventDB.timestamp <= end_time
+                TaskEventDB.timestamp <= end_time,
             )
         )
 
         base_query = EnvironmentFilter.apply(base_query, self.active_env)
 
-        from sqlalchemy import cast, Integer, literal
+        from sqlalchemy import Integer, cast, literal
         from sqlalchemy.types import DateTime as SADateTime
 
         dialect_name = getattr(getattr(self.session.bind, "dialect", None), "name", "sqlite")
         start_time_literal = literal(start_time, type_=SADateTime(timezone=True))
 
-        if dialect_name == 'postgresql':
-            seconds_from_start_expr = func.extract(
-                'epoch',
-                TaskEventDB.timestamp
-            ) - func.extract('epoch', start_time_literal)
+        if dialect_name == "postgresql":
+            seconds_from_start_expr = func.extract("epoch", TaskEventDB.timestamp) - func.extract(
+                "epoch", start_time_literal
+            )
         else:
             seconds_from_start_expr = (
                 func.julianday(TaskEventDB.timestamp) - func.julianday(start_time_literal)
             ) * 86400
 
         base_query_cte = base_query.add_columns(
-            cast(seconds_from_start_expr, Integer).label('seconds_from_start')
+            cast(seconds_from_start_expr, Integer).label("seconds_from_start")
         ).subquery()
 
         from sqlalchemy import case as sql_case
 
         bucket_query = (
             self.session.query(
-                cast(base_query_cte.c.seconds_from_start / bucket_seconds, Integer).label('bucket_index'),
-                func.sum(
-                    sql_case(
-                        (base_query_cte.c.event_type == 'task-received', 1),
-                        else_=0
-                    )
-                ).label('total_executions'),
-                func.sum(
-                    sql_case(
-                        (base_query_cte.c.event_type == 'task-succeeded', 1),
-                        else_=0
-                    )
-                ).label('succeeded'),
-                func.sum(
-                    sql_case(
-                        (base_query_cte.c.event_type == 'task-failed', 1),
-                        else_=0
-                    )
-                ).label('failed'),
-                func.sum(
-                    sql_case(
-                        (base_query_cte.c.event_type == 'task-retried', 1),
-                        else_=0
-                    )
-                ).label('retried')
+                cast(base_query_cte.c.seconds_from_start / bucket_seconds, Integer).label("bucket_index"),
+                func.sum(sql_case((base_query_cte.c.event_type == "task-received", 1), else_=0)).label(
+                    "total_executions"
+                ),
+                func.sum(sql_case((base_query_cte.c.event_type == "task-succeeded", 1), else_=0)).label("succeeded"),
+                func.sum(sql_case((base_query_cte.c.event_type == "task-failed", 1), else_=0)).label("failed"),
+                func.sum(sql_case((base_query_cte.c.event_type == "task-retried", 1), else_=0)).label("retried"),
             )
-            .group_by('bucket_index')
+            .group_by("bucket_index")
             .all()
         )
 
         bucket_stats = {
             result.bucket_index: {
-                'total_executions': result.total_executions or 0,
-                'succeeded': result.succeeded or 0,
-                'failed': result.failed or 0,
-                'retried': result.retried or 0
+                "total_executions": result.total_executions or 0,
+                "succeeded": result.succeeded or 0,
+                "failed": result.failed or 0,
+                "retried": result.retried or 0,
             }
             for result in bucket_query
         }
@@ -387,28 +314,22 @@ class TaskRegistryService:
         bucket_delta = timedelta(minutes=bucket_size_minutes)
 
         for i in range(num_buckets):
-            stats = bucket_stats.get(i, {
-                'total_executions': 0,
-                'succeeded': 0,
-                'failed': 0,
-                'retried': 0
-            })
+            stats = bucket_stats.get(i, {"total_executions": 0, "succeeded": 0, "failed": 0, "retried": 0})
 
             timeline_buckets.append(
                 TimelineBucket(
                     timestamp=current_bucket_start,
-                    total_executions=stats['total_executions'],
-                    succeeded=stats['succeeded'],
-                    failed=stats['failed'],
-                    retried=stats['retried']
+                    total_executions=stats["total_executions"],
+                    succeeded=stats["succeeded"],
+                    failed=stats["failed"],
+                    retried=stats["retried"],
                 )
             )
             current_bucket_start += bucket_delta
 
         non_empty_buckets = [b for b in timeline_buckets if b.total_executions > 0]
         logger.info(
-            f"Timeline for {task_name}: "
-            f"Returning {len(non_empty_buckets)}/{len(timeline_buckets)} non-empty buckets"
+            f"Timeline for {task_name}: Returning {len(non_empty_buckets)}/{len(timeline_buckets)} non-empty buckets"
         )
 
         return TaskTimelineResponse(
@@ -416,7 +337,7 @@ class TaskRegistryService:
             start_time=start_time,
             end_time=end_time,
             bucket_size_minutes=bucket_size_minutes,
-            buckets=timeline_buckets
+            buckets=timeline_buckets,
         )
 
     def _register_new_task(self, task_name: str) -> TaskRegistryDB:
@@ -433,7 +354,7 @@ class TaskRegistryService:
             Exception: If database operation fails
         """
         try:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             new_task = TaskRegistryDB(
                 id=str(uuid.uuid4()),
                 name=task_name,
@@ -441,7 +362,7 @@ class TaskRegistryService:
                 updated_at=now,
                 first_seen=now,
                 last_seen=now,
-                tags=[]
+                tags=[],
             )
             self.session.add(new_task)
             self.session.commit()
@@ -462,11 +383,9 @@ class TaskRegistryService:
         Note: Failures are logged but not raised to avoid breaking the main flow.
         """
         try:
-            self.session.query(TaskRegistryDB).filter(
-                TaskRegistryDB.name == task_name
-            ).update({
-                'last_seen': datetime.now(timezone.utc)
-            })
+            self.session.query(TaskRegistryDB).filter(TaskRegistryDB.name == task_name).update(
+                {"last_seen": datetime.now(UTC)}
+            )
             self.session.commit()
         except Exception as e:
             logger.error(f"Error updating last_seen for task '{task_name}': {e}")

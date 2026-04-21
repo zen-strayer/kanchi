@@ -2,19 +2,16 @@
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from monitor import (
-    CeleryEventMonitor,
     _RECONNECT_BASE_DELAY,
     _RECONNECT_MAX_DELAY,
-    _RECONNECT_MULTIPLIER,
+    CeleryEventMonitor,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_monitor(broker_url: str = "redis://localhost/0") -> CeleryEventMonitor:
     """Return a monitor with a fully mocked Celery app."""
@@ -27,6 +24,7 @@ def _make_monitor(broker_url: str = "redis://localhost/0") -> CeleryEventMonitor
 # ---------------------------------------------------------------------------
 # stop() flag
 # ---------------------------------------------------------------------------
+
 
 class TestStopFlag:
     def test_stop_sets_flag(self):
@@ -53,6 +51,7 @@ class TestStopFlag:
 # ---------------------------------------------------------------------------
 # Reconnect on error
 # ---------------------------------------------------------------------------
+
 
 class TestReconnectOnError:
     def test_reconnects_after_broker_error(self):
@@ -97,6 +96,7 @@ class TestReconnectOnError:
 # ---------------------------------------------------------------------------
 # Exponential backoff
 # ---------------------------------------------------------------------------
+
 
 class TestExponentialBackoff:
     def test_backoff_increases_on_repeated_errors(self):
@@ -178,6 +178,7 @@ class TestExponentialBackoff:
 # State reset on reconnect
 # ---------------------------------------------------------------------------
 
+
 class TestStateReset:
     def test_state_is_reset_on_each_reconnect(self):
         """self.state must be a fresh Events.State on every connection attempt."""
@@ -201,14 +202,13 @@ class TestStateReset:
 
         assert len(states_seen) == 3
         # Each attempt should have gotten a distinct State instance
-        assert len(set(id(s) for s in states_seen)) == 3, (
-            "state should be reset to a new object on each reconnect"
-        )
+        assert len(set(id(s) for s in states_seen)) == 3, "state should be reset to a new object on each reconnect"
 
 
 # ---------------------------------------------------------------------------
 # KeyboardInterrupt exits cleanly
 # ---------------------------------------------------------------------------
+
 
 class TestKeyboardInterrupt:
     def test_keyboard_interrupt_exits_without_reconnect(self):

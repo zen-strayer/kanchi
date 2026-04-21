@@ -2,25 +2,25 @@
 
 import logging
 import uuid
-from datetime import datetime, timezone
-from typing import List, Dict, Any, Optional
-from fastapi import APIRouter, Depends, HTTPException, Header, Query
-from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from datetime import UTC, datetime
+from typing import Any
 
-from services import TaskService, EnvironmentService, SessionService, AppConfigService, ProgressService
-from database import TaskEventDB
-from models import TaskEvent, TaskProgressSnapshot
-from database import ensure_utc_isoformat
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
 from config import Config
+from database import TaskEventDB, ensure_utc_isoformat
+from models import TaskEvent, TaskProgressSnapshot
 from security.auth import AuthenticatedUser
 from security.dependencies import get_auth_dependency
+from services import AppConfigService, EnvironmentService, ProgressService, SessionService, TaskService
 
 logger = logging.getLogger(__name__)
 
 
 class ResolveTaskRequest(BaseModel):
-    resolved_by: Optional[str] = None
+    resolved_by: str | None = None
 
 
 def create_router(app_state) -> APIRouter:
@@ -43,8 +43,8 @@ def create_router(app_state) -> APIRouter:
 
     async def get_active_env(
         session: Session = Depends(get_db),
-        x_session_id: Optional[str] = Header(None),
-        current_user: Optional[AuthenticatedUser] = Depends(optional_user_dep)
+        x_session_id: str | None = Header(None),
+        current_user: AuthenticatedUser | None = Depends(optional_user_dep),
     ):
         """Dependency to get active environment from session."""
         if not x_session_id:
@@ -63,24 +63,23 @@ def create_router(app_state) -> APIRouter:
         env_service = EnvironmentService(session)
         return env_service.get_environment(env_id)
 
-
-    @router.get("/events/recent", response_model=Dict[str, Any])
+    @router.get("/events/recent", response_model=dict[str, Any])
     async def get_recent_events(
         limit: int = 100,
         page: int = 0,
         aggregate: bool = True,
-        sort_by: Optional[str] = None,
+        sort_by: str | None = None,
         sort_order: str = "desc",
-        search: Optional[str] = None,
-        filters: Optional[str] = None,
-        start_time: Optional[str] = None,
-        end_time: Optional[str] = None,
-        filter_state: Optional[str] = None,
-        filter_worker: Optional[str] = None,
-        filter_task: Optional[str] = None,
-        filter_queue: Optional[str] = None,
+        search: str | None = None,
+        filters: str | None = None,
+        start_time: str | None = None,
+        end_time: str | None = None,
+        filter_state: str | None = None,
+        filter_worker: str | None = None,
+        filter_task: str | None = None,
+        filter_queue: str | None = None,
         session: Session = Depends(get_db),
-        active_env = Depends(get_active_env)
+        active_env=Depends(get_active_env),
     ):
         """Get recent task events with filtering and pagination."""
         logger.info(f"API /events/recent called with session env={active_env.name if active_env else 'None'}")
@@ -99,11 +98,10 @@ def create_router(app_state) -> APIRouter:
             filter_state=filter_state,
             filter_worker=filter_worker,
             filter_task=filter_task,
-            filter_queue=filter_queue
+            filter_queue=filter_queue,
         )
 
-
-    @router.get("/events/{task_id}", response_model=List[TaskEvent])
+    @router.get("/events/{task_id}", response_model=list[TaskEvent])
     async def get_task_events(task_id: str, session: Session = Depends(get_db)):
         """Get all events for a specific task."""
         task_service = TaskService(session)
@@ -129,58 +127,44 @@ def create_router(app_state) -> APIRouter:
             history=history,
         )
 
-
-    @router.get("/tasks/active", response_model=List[TaskEvent])
-    async def get_active_tasks(
-        session: Session = Depends(get_db),
-        active_env = Depends(get_active_env)
-    ):
+    @router.get("/tasks/active", response_model=list[TaskEvent])
+    async def get_active_tasks(session: Session = Depends(get_db), active_env=Depends(get_active_env)):
         """Get currently active tasks."""
         task_service = TaskService(session, active_env=active_env)
         active_events = task_service.get_active_tasks()
         return active_events
 
-
-    @router.get("/tasks/orphaned", response_model=List[TaskEvent])
-    async def get_orphaned_tasks(
-        session: Session = Depends(get_db),
-        active_env = Depends(get_active_env)
-    ):
+    @router.get("/tasks/orphaned", response_model=list[TaskEvent])
+    async def get_orphaned_tasks(session: Session = Depends(get_db), active_env=Depends(get_active_env)):
         """Get tasks that have been marked as orphaned and NOT yet retried."""
         task_service = TaskService(session, active_env=active_env)
         return task_service.get_unretried_orphaned_tasks()
 
-    @router.get("/tasks/failed/recent", response_model=List[TaskEvent])
+    @router.get("/tasks/failed/recent", response_model=list[TaskEvent])
     async def get_recent_failed_tasks(
-        hours: Optional[int] = Query(
-            default=None,
-            ge=1,
-            le=168,
-            description="Lookback window in hours (defaults to configured value)"
+        hours: int | None = Query(
+            default=None, ge=1, le=168, description="Lookback window in hours (defaults to configured value)"
         ),
         limit: int = 50,
         include_retried: bool = False,
         session: Session = Depends(get_db),
-        active_env = Depends(get_active_env)
+        active_env=Depends(get_active_env),
     ):
         """Get failed tasks within the last ``hours`` window."""
         task_service = TaskService(session, active_env=active_env)
         config_service = AppConfigService(session)
         lookback_hours = hours if hours is not None else config_service.get_task_issue_lookback_hours()
         failed_tasks = task_service.get_recent_failed_tasks(
-            hours=lookback_hours,
-            limit=limit,
-            exclude_retried=not include_retried
+            hours=lookback_hours, limit=limit, exclude_retried=not include_retried
         )
         return failed_tasks
-
 
     @router.post("/tasks/{task_id}/resolve")
     async def resolve_task(
         task_id: str,
-        payload: Optional[ResolveTaskRequest] = None,
+        payload: ResolveTaskRequest | None = None,
         session: Session = Depends(get_db),
-        current_user: Optional[AuthenticatedUser] = Depends(optional_user_dep)
+        current_user: AuthenticatedUser | None = Depends(optional_user_dep),
     ):
         """Manually mark a task as resolved without altering its state."""
         task_service = TaskService(session)
@@ -199,7 +183,6 @@ def create_router(app_state) -> APIRouter:
             "resolved_by": resolution.resolved_by,
             "resolved_at": ensure_utc_isoformat(resolution.resolved_at) if resolution.resolved_at else None,
         }
-
 
     @router.delete("/tasks/{task_id}/resolve")
     async def clear_task_resolution(
@@ -220,7 +203,6 @@ def create_router(app_state) -> APIRouter:
             "resolved_at": None,
         }
 
-
     @router.post("/tasks/{task_id}/retry")
     async def retry_task(task_id: str, session: Session = Depends(get_db)):
         """Retry a failed task by creating a new task with the same parameters."""
@@ -236,15 +218,12 @@ def create_router(app_state) -> APIRouter:
 
         original_task = task_events[-1]
 
-        orphaned_task = session.query(TaskEventDB).filter_by(
-            task_id=task_id,
-            is_orphan=True
-        ).first()
+        orphaned_task = session.query(TaskEventDB).filter_by(task_id=task_id, is_orphan=True).first()
 
         args = tuple(original_task.args) if original_task.args else ()
         kwargs = original_task.kwargs if original_task.kwargs else {}
 
-        queue_name = original_task.queue if original_task.queue else 'default'
+        queue_name = original_task.queue if original_task.queue else "default"
 
         new_task_id = str(uuid.uuid4())
 
@@ -256,9 +235,9 @@ def create_router(app_state) -> APIRouter:
             args=args,
             kwargs=kwargs,
             queue=queue_name,
-            task_id=new_task_id  # Use our pre-generated ID
+            task_id=new_task_id,  # Use our pre-generated ID
         )
-        
+
         return {
             "status": "success",
             "message": "Task retried successfully",
@@ -266,7 +245,7 @@ def create_router(app_state) -> APIRouter:
             "new_task_id": new_task_id,
             "task_name": original_task.task_name,
             "was_orphaned": orphaned_task is not None,
-            "timestamp": datetime.now(timezone.utc).isoformat()
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
     return router

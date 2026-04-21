@@ -1,22 +1,17 @@
 """Tests for workflow circuit breaker preventing infinite loops."""
 
+import os
+import sys
 import unittest
 import uuid
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 
-import sys
-import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-from tests.base import DatabaseTestCase
-from services.workflow_service import WorkflowService
 from database import WorkflowDB, WorkflowExecutionDB
-from models import (
-    WorkflowDefinition,
-    TriggerConfig,
-    ActionConfig,
-    CircuitBreakerConfig
-)
+from models import CircuitBreakerConfig, WorkflowDefinition
+from services.workflow_service import WorkflowService
+from tests.base import DatabaseTestCase
 
 
 class TestWorkflowCircuitBreaker(DatabaseTestCase):
@@ -26,11 +21,7 @@ class TestWorkflowCircuitBreaker(DatabaseTestCase):
         super().setUp()
         self.workflow_service = WorkflowService(self.session)
 
-    def _create_test_workflow(
-        self,
-        name="Test Workflow",
-        circuit_breaker_config=None
-    ) -> WorkflowDefinition:
+    def _create_test_workflow(self, name="Test Workflow", circuit_breaker_config=None) -> WorkflowDefinition:
         """Helper to create a test workflow."""
         workflow_db = WorkflowDB(
             id=str(uuid.uuid4()),
@@ -40,7 +31,7 @@ class TestWorkflowCircuitBreaker(DatabaseTestCase):
             trigger_config={},
             actions=[{"type": "task.retry", "params": {}}],
             priority=100,
-            circuit_breaker_config=circuit_breaker_config
+            circuit_breaker_config=circuit_breaker_config,
         )
         self.session.add(workflow_db)
         self.session.commit()
@@ -49,15 +40,10 @@ class TestWorkflowCircuitBreaker(DatabaseTestCase):
     def test_circuit_breaker_open_prevents_execution(self):
         """Test that circuit breaker prevents execution when limit is reached."""
         circuit_breaker = CircuitBreakerConfig(
-            enabled=True,
-            max_executions=3,
-            window_seconds=300,
-            context_field="root_id"
+            enabled=True, max_executions=3, window_seconds=300, context_field="root_id"
         )
 
-        workflow = self._create_test_workflow(
-            circuit_breaker_config=circuit_breaker.dict()
-        )
+        workflow = self._create_test_workflow(circuit_breaker_config=circuit_breaker.dict())
 
         root_id = str(uuid.uuid4())
         context = {"root_id": root_id, "task_id": str(uuid.uuid4())}
@@ -69,7 +55,7 @@ class TestWorkflowCircuitBreaker(DatabaseTestCase):
                 trigger_event=context,
                 status="completed",
                 circuit_breaker_key=root_id,
-                triggered_at=datetime.now(timezone.utc)
+                triggered_at=datetime.now(UTC),
             )
             self.session.add(execution)
         self.session.commit()
@@ -86,15 +72,10 @@ class TestWorkflowCircuitBreaker(DatabaseTestCase):
     def test_circuit_breaker_closed_under_limit(self):
         """Test that circuit breaker allows execution when under limit."""
         circuit_breaker = CircuitBreakerConfig(
-            enabled=True,
-            max_executions=5,
-            window_seconds=300,
-            context_field="root_id"
+            enabled=True, max_executions=5, window_seconds=300, context_field="root_id"
         )
 
-        workflow = self._create_test_workflow(
-            circuit_breaker_config=circuit_breaker.dict()
-        )
+        workflow = self._create_test_workflow(circuit_breaker_config=circuit_breaker.dict())
 
         root_id = str(uuid.uuid4())
         context = {"root_id": root_id, "task_id": str(uuid.uuid4())}
@@ -106,7 +87,7 @@ class TestWorkflowCircuitBreaker(DatabaseTestCase):
                 trigger_event=context,
                 status="completed",
                 circuit_breaker_key=root_id,
-                triggered_at=datetime.now(timezone.utc)
+                triggered_at=datetime.now(UTC),
             )
             self.session.add(execution)
         self.session.commit()
@@ -120,20 +101,15 @@ class TestWorkflowCircuitBreaker(DatabaseTestCase):
     def test_circuit_breaker_respects_time_window(self):
         """Test that circuit breaker only counts executions within time window."""
         circuit_breaker = CircuitBreakerConfig(
-            enabled=True,
-            max_executions=3,
-            window_seconds=300,
-            context_field="root_id"
+            enabled=True, max_executions=3, window_seconds=300, context_field="root_id"
         )
 
-        workflow = self._create_test_workflow(
-            circuit_breaker_config=circuit_breaker.dict()
-        )
+        workflow = self._create_test_workflow(circuit_breaker_config=circuit_breaker.dict())
 
         root_id = str(uuid.uuid4())
         context = {"root_id": root_id, "task_id": str(uuid.uuid4())}
 
-        old_time = datetime.now(timezone.utc) - timedelta(seconds=400)
+        old_time = datetime.now(UTC) - timedelta(seconds=400)
         for i in range(3):
             execution = WorkflowExecutionDB(
                 workflow_id=workflow.id,
@@ -141,29 +117,21 @@ class TestWorkflowCircuitBreaker(DatabaseTestCase):
                 trigger_event=context,
                 status="completed",
                 circuit_breaker_key=root_id,
-                triggered_at=old_time
+                triggered_at=old_time,
             )
             self.session.add(execution)
         self.session.commit()
 
-        state = self.workflow_service.is_circuit_breaker_open(
-            workflow, context
-        )
+        state = self.workflow_service.is_circuit_breaker_open(workflow, context)
 
         self.assertFalse(state.is_open)
         self.assertIsNone(state.reason)
 
     def test_circuit_breaker_disabled_always_allows(self):
         """Test that disabled circuit breaker always allows execution."""
-        circuit_breaker = CircuitBreakerConfig(
-            enabled=False,
-            max_executions=1,
-            window_seconds=300
-        )
+        circuit_breaker = CircuitBreakerConfig(enabled=False, max_executions=1, window_seconds=300)
 
-        workflow = self._create_test_workflow(
-            circuit_breaker_config=circuit_breaker.dict()
-        )
+        workflow = self._create_test_workflow(circuit_breaker_config=circuit_breaker.dict())
 
         root_id = str(uuid.uuid4())
         context = {"root_id": root_id, "task_id": str(uuid.uuid4())}
@@ -175,14 +143,12 @@ class TestWorkflowCircuitBreaker(DatabaseTestCase):
                 trigger_event=context,
                 status="completed",
                 circuit_breaker_key=root_id,
-                triggered_at=datetime.now(timezone.utc)
+                triggered_at=datetime.now(UTC),
             )
             self.session.add(execution)
         self.session.commit()
 
-        state = self.workflow_service.is_circuit_breaker_open(
-            workflow, context
-        )
+        state = self.workflow_service.is_circuit_breaker_open(workflow, context)
 
         self.assertFalse(state.is_open)
         self.assertIsNone(state.reason)
@@ -190,22 +156,15 @@ class TestWorkflowCircuitBreaker(DatabaseTestCase):
     def test_circuit_breaker_fallback_to_task_id(self):
         """Test that circuit breaker falls back to task_id when context_field is missing."""
         circuit_breaker = CircuitBreakerConfig(
-            enabled=True,
-            max_executions=2,
-            window_seconds=300,
-            context_field="custom_field"
+            enabled=True, max_executions=2, window_seconds=300, context_field="custom_field"
         )
 
-        workflow = self._create_test_workflow(
-            circuit_breaker_config=circuit_breaker.dict()
-        )
+        workflow = self._create_test_workflow(circuit_breaker_config=circuit_breaker.dict())
 
         task_id = str(uuid.uuid4())
         context = {"task_id": task_id}
 
-        key, field = self.workflow_service.resolve_circuit_breaker_key(
-            workflow, context
-        )
+        key, field = self.workflow_service.resolve_circuit_breaker_key(workflow, context)
 
         self.assertEqual(key, task_id)
         self.assertIn(field, ["custom_field", "root_id", "task_id"])
@@ -213,15 +172,10 @@ class TestWorkflowCircuitBreaker(DatabaseTestCase):
     def test_circuit_breaker_with_different_keys_separate_limits(self):
         """Test that different circuit breaker keys have separate limits."""
         circuit_breaker = CircuitBreakerConfig(
-            enabled=True,
-            max_executions=2,
-            window_seconds=300,
-            context_field="root_id"
+            enabled=True, max_executions=2, window_seconds=300, context_field="root_id"
         )
 
-        workflow = self._create_test_workflow(
-            circuit_breaker_config=circuit_breaker.dict()
-        )
+        workflow = self._create_test_workflow(circuit_breaker_config=circuit_breaker.dict())
 
         root_id_1 = str(uuid.uuid4())
         root_id_2 = str(uuid.uuid4())
@@ -234,7 +188,7 @@ class TestWorkflowCircuitBreaker(DatabaseTestCase):
                     trigger_event={"root_id": root_id},
                     status="completed",
                     circuit_breaker_key=root_id,
-                    triggered_at=datetime.now(timezone.utc)
+                    triggered_at=datetime.now(UTC),
                 )
                 self.session.add(execution)
         self.session.commit()
@@ -258,15 +212,10 @@ class TestWorkflowCircuitBreaker(DatabaseTestCase):
     def test_circuit_breaker_skip_records_execution(self):
         """Test that circuit breaker skip creates execution record."""
         circuit_breaker = CircuitBreakerConfig(
-            enabled=True,
-            max_executions=1,
-            window_seconds=300,
-            context_field="root_id"
+            enabled=True, max_executions=1, window_seconds=300, context_field="root_id"
         )
 
-        workflow = self._create_test_workflow(
-            circuit_breaker_config=circuit_breaker.dict()
-        )
+        workflow = self._create_test_workflow(circuit_breaker_config=circuit_breaker.dict())
 
         root_id = str(uuid.uuid4())
         context = {"root_id": root_id, "task_id": str(uuid.uuid4())}
@@ -277,13 +226,12 @@ class TestWorkflowCircuitBreaker(DatabaseTestCase):
             trigger_event=context,
             workflow_snapshot=workflow.dict(),
             circuit_breaker_key=root_id,
-            reason="Circuit breaker test"
+            reason="Circuit breaker test",
         )
 
-        execution = self.session.query(WorkflowExecutionDB).filter_by(
-            workflow_id=workflow.id,
-            status="circuit_open"
-        ).first()
+        execution = (
+            self.session.query(WorkflowExecutionDB).filter_by(workflow_id=workflow.id, status="circuit_open").first()
+        )
 
         self.assertIsNotNone(execution)
         self.assertEqual(execution.circuit_breaker_key, root_id)
@@ -302,14 +250,12 @@ class TestWorkflowCircuitBreaker(DatabaseTestCase):
                 trigger_type="task.failed",
                 trigger_event=context,
                 status="completed",
-                triggered_at=datetime.now(timezone.utc)
+                triggered_at=datetime.now(UTC),
             )
             self.session.add(execution)
         self.session.commit()
 
-        state = self.workflow_service.is_circuit_breaker_open(
-            workflow, context
-        )
+        state = self.workflow_service.is_circuit_breaker_open(workflow, context)
 
         self.assertFalse(state.is_open)
         self.assertIsNone(state.reason)
@@ -317,5 +263,5 @@ class TestWorkflowCircuitBreaker(DatabaseTestCase):
         self.assertIsNone(state.field)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

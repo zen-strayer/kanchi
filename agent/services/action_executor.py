@@ -1,13 +1,14 @@
 """Action executor that routes to specific action handlers."""
 
 import logging
-from typing import Dict, Any, Type
+from typing import Any
+
 from sqlalchemy.orm import Session
 
-from services.actions.base import ActionHandler
-from services.actions.slack_action import SlackActionHandler
-from services.actions.retry_action import RetryActionHandler
 from models import ActionResult
+from services.actions.base import ActionHandler
+from services.actions.retry_action import RetryActionHandler
+from services.actions.slack_action import SlackActionHandler
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +16,7 @@ logger = logging.getLogger(__name__)
 class ActionExecutor:
     """Executes workflow actions by routing to specific handlers."""
 
-    ACTION_HANDLERS: Dict[str, Type[ActionHandler]] = {
+    ACTION_HANDLERS: dict[str, type[ActionHandler]] = {
         "slack.notify": SlackActionHandler,
         "task.retry": RetryActionHandler,
     }
@@ -39,12 +40,7 @@ class ActionExecutor:
         self.db_manager = db_manager
         self.monitor_instance = monitor_instance
 
-    async def execute(
-        self,
-        action_type: str,
-        context: Dict[str, Any],
-        params: Dict[str, Any]
-    ) -> ActionResult:
+    async def execute(self, action_type: str, context: dict[str, Any], params: dict[str, Any]) -> ActionResult:
         """
         Execute an action.
 
@@ -64,13 +60,11 @@ class ActionExecutor:
                 action_type=action_type,
                 status="failed",
                 error_message=f"Unknown action type: {action_type}",
-                duration_ms=0
+                duration_ms=0,
             )
 
         handler = handler_class(
-            session=self.session,
-            db_manager=self.db_manager,
-            monitor_instance=self.monitor_instance
+            session=self.session, db_manager=self.db_manager, monitor_instance=self.monitor_instance
         )
 
         try:
@@ -78,12 +72,7 @@ class ActionExecutor:
             return result
         except Exception as e:
             logger.error(f"Action execution failed: {action_type} - {e}", exc_info=True)
-            return ActionResult(
-                action_type=action_type,
-                status="failed",
-                error_message=str(e),
-                duration_ms=0
-            )
+            return ActionResult(action_type=action_type, status="failed", error_message=str(e), duration_ms=0)
 
     @classmethod
     def get_supported_actions(cls) -> list[str]:
@@ -96,7 +85,7 @@ class ActionExecutor:
         return [cls.ACTION_CATALOG[action] for action in cls.get_supported_actions() if action in cls.ACTION_CATALOG]
 
     @classmethod
-    def register_action_handler(cls, action_type: str, handler_class: Type[ActionHandler]):
+    def register_action_handler(cls, action_type: str, handler_class: type[ActionHandler]):
         """Register a new action handler (for extensibility)."""
         cls.ACTION_HANDLERS[action_type] = handler_class
         logger.info(f"Registered action handler: {action_type}")

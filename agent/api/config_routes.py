@@ -1,15 +1,14 @@
 """API routes for application configuration."""
 
 import logging
-from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from config import Config
-from models import AppSetting, AppSettingUpdate, AppConfigSnapshot
-from services import AppConfigService
+from models import AppConfigSnapshot, AppSetting, AppSettingUpdate
 from security.dependencies import get_auth_dependency
+from services import AppConfigService
 
 logger = logging.getLogger(__name__)
 
@@ -35,22 +34,17 @@ def create_router(app_state) -> APIRouter:
         return AppConfigService(session)
 
     @router.get("", response_model=AppConfigSnapshot)
-    async def get_config_snapshot(
-        config_service: AppConfigService = Depends(get_config_service)
-    ):
+    async def get_config_snapshot(config_service: AppConfigService = Depends(get_config_service)):
         """Get grouped application configuration with defaults applied."""
         return config_service.get_config_snapshot()
 
-    @router.get("/settings", response_model=List[AppSetting])
+    @router.get("/settings", response_model=list[AppSetting])
     async def list_settings(config_service: AppConfigService = Depends(get_config_service)):
         """List all application settings."""
         return config_service.list_settings()
 
     @router.get("/settings/{key}", response_model=AppSetting)
-    async def get_setting(
-        key: str,
-        config_service: AppConfigService = Depends(get_config_service)
-    ):
+    async def get_setting(key: str, config_service: AppConfigService = Depends(get_config_service)):
         """Get a single application setting."""
         setting = config_service.get_setting(key)
         if not setting:
@@ -59,9 +53,7 @@ def create_router(app_state) -> APIRouter:
 
     @router.put("/settings/{key}", response_model=AppSetting)
     async def upsert_setting(
-        key: str,
-        payload: AppSettingUpdate,
-        config_service: AppConfigService = Depends(get_config_service)
+        key: str, payload: AppSettingUpdate, config_service: AppConfigService = Depends(get_config_service)
     ):
         """Create or update an application setting."""
         try:
@@ -73,10 +65,7 @@ def create_router(app_state) -> APIRouter:
             raise HTTPException(status_code=500, detail="Failed to update setting") from exc
 
     @router.delete("/settings/{key}", status_code=204)
-    async def delete_setting(
-        key: str,
-        config_service: AppConfigService = Depends(get_config_service)
-    ):
+    async def delete_setting(key: str, config_service: AppConfigService = Depends(get_config_service)):
         """Delete a setting (falls back to default)."""
         deleted = config_service.delete_setting(key)
         if not deleted:

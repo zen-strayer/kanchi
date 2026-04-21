@@ -1,12 +1,12 @@
 """Token utilities for authentication."""
 
 import base64
-import json
-import hmac
 import hashlib
+import hmac
+import json
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Tuple
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 
 class TokenError(Exception):
@@ -27,13 +27,14 @@ def _b64_decode(data: str) -> bytes:
 @dataclass
 class TokenPayload:
     """Decoded token payload."""
+
     token_type: str
     user_id: str
     session_id: str
     issued_at: datetime
     expires_at: datetime
-    scopes: Tuple[str, ...]
-    raw: Dict[str, Any]
+    scopes: tuple[str, ...]
+    raw: dict[str, Any]
 
 
 class TokenManager:
@@ -48,14 +49,14 @@ class TokenManager:
         digest = hmac.new(self._secret, signing_input, hashlib.sha256).digest()
         return _b64_encode(digest)
 
-    def _encode(self, header: Dict[str, Any], payload: Dict[str, Any]) -> str:
+    def _encode(self, header: dict[str, Any], payload: dict[str, Any]) -> str:
         header_json = json.dumps(header, separators=(",", ":"), sort_keys=True).encode("utf-8")
         payload_json = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
         signing_input = b".".join([_b64_encode(header_json).encode("ascii"), _b64_encode(payload_json).encode("ascii")])
         signature = self._sign(signing_input)
         return f"{signing_input.decode('ascii')}.{signature}"
 
-    def _decode(self, token: str) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    def _decode(self, token: str) -> tuple[dict[str, Any], dict[str, Any]]:
         try:
             header_b64, payload_b64, signature = token.split(".")
         except ValueError as exc:
@@ -80,14 +81,14 @@ class TokenManager:
         user_id: str,
         session_id: str,
         expires_in: timedelta,
-        scopes: Tuple[str, ...] = (),
-        extra: Dict[str, Any] | None = None,
-    ) -> Tuple[str, datetime]:
+        scopes: tuple[str, ...] = (),
+        extra: dict[str, Any] | None = None,
+    ) -> tuple[str, datetime]:
         """Create a signed token and return it with the expiry datetime."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         exp = now + expires_in
         header = {"alg": "HS256", "typ": "JWT"}
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "typ": token_type,
             "uid": user_id,
             "sid": session_id,
@@ -123,10 +124,10 @@ class TokenManager:
         if not all([token_type, user_id, session_id, issued_at, expires_at]):
             raise TokenError("Incomplete token payload")
 
-        issued_at_dt = datetime.fromtimestamp(int(issued_at), tz=timezone.utc)
-        expires_at_dt = datetime.fromtimestamp(int(expires_at), tz=timezone.utc)
+        issued_at_dt = datetime.fromtimestamp(int(issued_at), tz=UTC)
+        expires_at_dt = datetime.fromtimestamp(int(expires_at), tz=UTC)
 
-        if expires_at_dt <= datetime.now(timezone.utc):
+        if expires_at_dt <= datetime.now(UTC):
             raise TokenError("Token expired")
 
         scopes_raw = payload.get("scp") or []
