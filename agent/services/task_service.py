@@ -475,7 +475,7 @@ class TaskService:
 
         recent_activity = (
             self.session.query(func.count(TaskEventDB.id).label('last_hour_events'))
-            .filter(TaskEventDB.timestamp >= func.datetime('now', '-1 hour'))
+            .filter(TaskEventDB.timestamp >= datetime.now(timezone.utc) - timedelta(hours=1))
             .scalar()
         )
 
