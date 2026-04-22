@@ -61,3 +61,37 @@ class TestGetStoredLimitCap(unittest.TestCase):
         import api.websocket_routes as ws_module
 
         self.assertEqual(ws_module.GET_STORED_LIMIT_DEFAULT, 1_000)
+
+    def test_negative_limit_returns_error(self):
+        """limit < 1 must send an error response and not query the DB."""
+        import api.websocket_routes as ws_module
+
+        app_state = self._make_app_state(db_manager=MagicMock())
+        websocket = MagicMock()
+
+        async def run():
+            await ws_module._handle_get_stored_impl(app_state, websocket, {"type": "get_stored", "limit": -1})
+
+        asyncio.run(run())
+
+        sent_json = app_state.connection_manager.send_personal_message.call_args[0][0]
+        sent = json.loads(sent_json)
+        self.assertEqual(sent["type"], "error")
+        app_state.db_manager.get_session.assert_not_called()
+
+    def test_non_integer_limit_returns_error(self):
+        """A non-integer limit must send an error response and not query the DB."""
+        import api.websocket_routes as ws_module
+
+        app_state = self._make_app_state(db_manager=MagicMock())
+        websocket = MagicMock()
+
+        async def run():
+            await ws_module._handle_get_stored_impl(app_state, websocket, {"type": "get_stored", "limit": "all"})
+
+        asyncio.run(run())
+
+        sent_json = app_state.connection_manager.send_personal_message.call_args[0][0]
+        sent = json.loads(sent_json)
+        self.assertEqual(sent["type"], "error")
+        app_state.db_manager.get_session.assert_not_called()

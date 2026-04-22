@@ -39,11 +39,16 @@ async def _handle_get_stored_impl(app_state, websocket: WebSocket, message: dict
         websocket: WebSocket connection
         message: The incoming message dict with optional 'limit' key
     """
-    limit = message.get("limit", GET_STORED_LIMIT_DEFAULT)
-    if limit is None:
+    raw_limit = message.get("limit")
+    if raw_limit is None:
         limit = GET_STORED_LIMIT_DEFAULT
+    elif not isinstance(raw_limit, int) or raw_limit < 1:
+        error_response = WebSocketErrorResponse(message=f"limit must be a positive integer. Got: {raw_limit!r}.")
+        await app_state.connection_manager.send_personal_message(error_response.model_dump_json(), websocket)
+        return
+    else:
+        limit = raw_limit
 
-    # Check if limit exceeds maximum allowed value
     if limit > GET_STORED_LIMIT_MAX:
         error_response = WebSocketErrorResponse(
             message=f"limit exceeds maximum allowed value of {GET_STORED_LIMIT_MAX}. Requested: {limit}."
