@@ -388,7 +388,7 @@ provides-extras = ["db-postgres-async", "db-mysql-native"]
 [package.metadata.requires-dev]
 dev = [
     { name = "pytest", specifier = ">=7.4.0" },
-    { name = "ruff", specifier = ">=0.14.0" },
+    { name = "ruff", specifier = ">=0.15.11" },
     { name = "ty", specifier = ">=0.0.32" },
 ]
 

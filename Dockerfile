@@ -50,7 +50,7 @@ ENV NUXT_PUBLIC_WS_URL=ws://localhost:8765/ws
 EXPOSE 8765 3000
 
 RUN echo '#!/bin/bash\n\
-cd /app/agent && python main.py &\n\
+cd /app/agent && uv run python main.py &\n\
 cd /app/frontend && npm run preview &\n\
 wait' > /app/start.sh && chmod +x /app/start.sh
 
