@@ -105,13 +105,15 @@ def create_router(app_state) -> APIRouter:  # noqa: C901
         if not config.auth_basic_enabled:
             raise HTTPException(status_code=404, detail="Basic authentication disabled")
 
-        client_ip = request.client.host if request.client else "unknown"
-        if not _is_rate_limited(client_ip):
-            raise HTTPException(
-                status_code=429,
-                detail="Too many login attempts. Please try again later.",
-                headers={"Retry-After": "60"},
-            )
+        if request.client:
+            if not _is_rate_limited(request.client.host):
+                raise HTTPException(
+                    status_code=429,
+                    detail="Too many login attempts. Please try again later.",
+                    headers={"Retry-After": "60"},
+                )
+        else:
+            logger.warning("Rate limiter: cannot determine client IP, skipping limit check")
 
         try:
             result = auth_service.basic_login(

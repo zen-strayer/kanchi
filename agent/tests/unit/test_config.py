@@ -104,6 +104,16 @@ class TestConfigOAuthEmailPatternValidation(unittest.TestCase):
         )
         self.assertEqual(config.allowed_email_patterns, [])
 
+    def test_auth_disabled_oauth_enabled_empty_patterns_does_not_raise(self):
+        """When auth_enabled=False, OAuth+empty patterns must not raise (auth is inactive)."""
+        config = Config(
+            broker_url="redis://localhost:6379/0",
+            auth_enabled=False,
+            auth_google_enabled=True,
+            allowed_email_patterns=[],
+        )
+        self.assertEqual(config.allowed_email_patterns, [])
+
 
 if __name__ == "__main__":
     unittest.main()
