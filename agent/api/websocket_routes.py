@@ -173,16 +173,18 @@ def create_router(app_state) -> APIRouter:  # noqa: C901
                 await websocket.accept()
                 already_accepted = True
                 try:
-                    raw = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
+                    raw = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
                     first_msg = json.loads(raw)
                 except TimeoutError:
-                    await websocket.close(code=4401, reason="Authentication timeout")
+                    logger.warning("WS auth timeout for %s", websocket.client)
+                    await websocket.close(code=4401, reason="Unauthorized")
                     return
-                except Exception:
-                    await websocket.close(code=4401, reason="Authentication required")
+                except Exception as exc:
+                    logger.debug("WS auth: failed to parse first message: %s", exc)
+                    await websocket.close(code=4401, reason="Unauthorized")
                     return
-                if first_msg.get("type") != "auth" or not first_msg.get("token"):
-                    await websocket.close(code=4401, reason="Authentication required")
+                if not isinstance(first_msg, dict) or first_msg.get("type") != "auth" or not first_msg.get("token"):
+                    await websocket.close(code=4401, reason="Unauthorized")
                     return
                 token = first_msg["token"]
 
