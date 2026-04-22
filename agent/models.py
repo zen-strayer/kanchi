@@ -565,6 +565,13 @@ class PongResponse(BaseModel):
     timestamp: datetime
 
 
+class AuthMessage(BaseModel):
+    """WebSocket authentication message — sent as first message when using token-in-message flow."""
+
+    type: Literal["auth"] = "auth"
+    token: str
+
+
 class SubscribeMessage(BaseModel):
     """WebSocket subscribe message"""
 

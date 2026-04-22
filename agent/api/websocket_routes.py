@@ -149,19 +149,38 @@ def create_router(app_state) -> APIRouter:  # noqa: C901
             await websocket.close(code=1011, reason="Server not initialized")
             return
 
+        already_accepted = False
         if config.auth_enabled:
-            token = websocket.query_params.get("token")
-            if not token:
-                auth_header = websocket.headers.get("Authorization")
-                if auth_header and auth_header.startswith("Bearer "):
-                    token = auth_header[len("Bearer ") :].strip()
-            if not token:
-                await websocket.close(code=4401, reason="Authentication required")
-                return
-
             if not app_state.auth_manager or not app_state.db_manager:
                 await websocket.close(code=1011, reason="Authentication not initialized")
                 return
+
+            # Prefer token-in-message over query param (query param leaks into logs)
+            token = websocket.query_params.get("token")
+            if token:
+                logger.warning(
+                    "WebSocket token passed as query param — this leaks into server logs. "
+                    'Send {"type":"auth","token":"..."} as the first message instead.'
+                )
+            else:
+                auth_header = websocket.headers.get("Authorization")
+                if auth_header and auth_header.startswith("Bearer "):
+                    token = auth_header[len("Bearer ") :].strip()
+
+            if not token:
+                # Accept connection first, then wait for auth message
+                await websocket.accept()
+                already_accepted = True
+                try:
+                    raw = await websocket.receive_text()
+                    first_msg = json.loads(raw)
+                except Exception:
+                    await websocket.close(code=4401, reason="Authentication required")
+                    return
+                if first_msg.get("type") != "auth" or not first_msg.get("token"):
+                    await websocket.close(code=4401, reason="Authentication required")
+                    return
+                token = first_msg["token"]
 
             try:
                 with app_state.db_manager.get_session() as session:
@@ -173,7 +192,16 @@ def create_router(app_state) -> APIRouter:  # noqa: C901
                 await websocket.close(code=4401, reason="Unauthorized")
                 return
 
-        await app_state.connection_manager.connect(websocket)
+        if already_accepted:
+            # Socket already accepted during first-message auth — register without re-accepting
+            app_state.connection_manager.active_connections.append(websocket)
+            app_state.connection_manager.client_filters[websocket] = {}
+            app_state.connection_manager.client_modes[websocket] = "live"
+            app_state.connection_manager.client_environments[websocket] = None
+            if len(app_state.connection_manager.active_connections) == 1:
+                app_state.connection_manager.start_background_broadcaster()
+        else:
+            await app_state.connection_manager.connect(websocket)
 
         welcome = ConnectionInfo(
             status="connected",
