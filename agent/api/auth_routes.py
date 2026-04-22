@@ -29,9 +29,41 @@ logger = logging.getLogger(__name__)
 
 _login_attempts: dict[str, list[float]] = defaultdict(list)
 
+_MAX_TRACKED_IPS = 10_000
 
-def _is_rate_limited(ip: str, max_attempts: int = 5, window_seconds: float = 60.0) -> bool:
-    """Return True if the request is allowed; False if the IP is rate-limited."""
+
+def _prune_stale_ips(window_seconds: float) -> None:
+    """Remove IPs whose most-recent attempt is older than window_seconds."""
+    now = monotonic()
+    stale = [ip for ip, ts in _login_attempts.items() if not ts or now - max(ts) >= window_seconds]
+    for ip in stale:
+        del _login_attempts[ip]
+
+
+def _get_client_ip(request: Request) -> str:
+    """Extract client IP for rate limiting.
+
+    Prefers X-Forwarded-For (first hop) to work behind reverse proxies.
+    Note: X-Forwarded-For can be spoofed when not behind a trusted proxy.
+    For production deployments, configure FORWARDED_ALLOW_IPS in uvicorn.
+    """
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        # First entry is the original client IP (subsequent entries are proxy hops)
+        return forwarded_for.split(",")[0].strip()
+    if request.client:
+        return request.client.host
+    return ""
+
+
+def _is_allowed(ip: str, max_attempts: int = 5, window_seconds: float = 60.0) -> bool:
+    """Return True if the request is allowed; False if the IP is rate-limited.
+
+    Cleans up expired entries on each call. Prunes the global dict when it
+    exceeds _MAX_TRACKED_IPS to prevent unbounded memory growth under probe traffic.
+    """
+    if len(_login_attempts) > _MAX_TRACKED_IPS:
+        _prune_stale_ips(window_seconds)
     now = monotonic()
     recent = [t for t in _login_attempts[ip] if now - t < window_seconds]
     _login_attempts[ip] = recent
@@ -105,8 +137,9 @@ def create_router(app_state) -> APIRouter:  # noqa: C901
         if not config.auth_basic_enabled:
             raise HTTPException(status_code=404, detail="Basic authentication disabled")
 
-        if request.client:
-            if not _is_rate_limited(request.client.host):
+        client_ip = _get_client_ip(request)
+        if client_ip:
+            if not _is_allowed(client_ip):
                 raise HTTPException(
                     status_code=429,
                     detail="Too many login attempts. Please try again later.",
