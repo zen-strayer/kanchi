@@ -42,6 +42,7 @@ class ApplicationState:
         self.config: Config | None = None
         self.auth_manager = None
         self.auth_dependencies = None
+        self.retention_task = None
 
 
 app_state = ApplicationState()
@@ -54,6 +55,8 @@ async def lifespan(app: FastAPI):
     await initialize_application()
     yield
     # Shutdown
+    if app_state.retention_task:
+        await app_state.retention_task.stop()
     if app_state.workflow_engine:
         app_state.workflow_engine.shutdown(wait=True)
     if app_state.health_monitor:
@@ -281,6 +284,14 @@ async def initialize_application():
     app_state.workflow_engine.monitor_instance = app_state.monitor_instance
 
     start_health_monitor()
+
+    from services.retention_service import RetentionBackgroundTask
+
+    app_state.retention_task = RetentionBackgroundTask(
+        db_manager=app_state.db_manager,
+        retention_days=config.data_retention_days,
+    )
+    app_state.retention_task.start()
 
 
 def start_monitor(config: Config):
