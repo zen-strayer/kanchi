@@ -25,9 +25,10 @@ RUN apt-get update && apt-get install -y curl \
 WORKDIR /app
 
 COPY agent/pyproject.toml agent/uv.lock ./agent/
-RUN pip install uv && \
+RUN pip install --no-cache-dir uv && \
     cd agent && \
-    uv sync --no-dev
+    uv export --format requirements-txt --no-dev > requirements.txt && \
+    pip install --no-cache-dir -r requirements.txt
 
 COPY agent/ ./agent/
 
@@ -50,7 +51,7 @@ ENV NUXT_PUBLIC_WS_URL=ws://localhost:8765/ws
 EXPOSE 8765 3000
 
 RUN echo '#!/bin/bash\n\
-cd /app/agent && uv run python main.py &\n\
+cd /app/agent && python main.py &\n\
 cd /app/frontend && npm run preview &\n\
 wait' > /app/start.sh && chmod +x /app/start.sh
 
