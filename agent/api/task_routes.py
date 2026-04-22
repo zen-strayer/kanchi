@@ -85,21 +85,24 @@ def create_router(app_state) -> APIRouter:  # noqa: C901
         logger.info(f"API /events/recent called with session env={active_env.name if active_env else 'None'}")
 
         task_service = TaskService(session, active_env=active_env)
-        return task_service.get_recent_events(
-            limit=limit,
-            page=page,
-            aggregate=aggregate,
-            sort_by=sort_by,
-            sort_order=sort_order,
-            search=search,
-            filters=filters,
-            start_time=start_time,
-            end_time=end_time,
-            filter_state=filter_state,
-            filter_worker=filter_worker,
-            filter_task=filter_task,
-            filter_queue=filter_queue,
-        )
+        try:
+            return task_service.get_recent_events(
+                limit=limit,
+                page=page,
+                aggregate=aggregate,
+                sort_by=sort_by,
+                sort_order=sort_order,
+                search=search,
+                filters=filters,
+                start_time=start_time,
+                end_time=end_time,
+                filter_state=filter_state,
+                filter_worker=filter_worker,
+                filter_task=filter_task,
+                filter_queue=filter_queue,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @router.get("/events/{task_id}", response_model=list[TaskEvent])
     async def get_task_events(task_id: str, session: Session = Depends(get_db)):

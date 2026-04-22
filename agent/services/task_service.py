@@ -19,6 +19,19 @@ from utils.payload_sanitizer import find_placeholder_paths
 
 logger = logging.getLogger(__name__)
 
+ALLOWED_SORT_COLUMNS: frozenset[str] = frozenset(
+    {
+        "timestamp",
+        "task_name",
+        "event_type",
+        "hostname",
+        "queue",
+        "runtime",
+        "retry_count",
+        "retries",
+    }
+)
+
 
 def _ensure_utc(dt: datetime | None) -> datetime | None:
     if dt is None:
@@ -1255,6 +1268,9 @@ class TaskService:
 
     def _apply_sorting(self, query, sort_by: str | None, sort_order: str, model=TaskEventDB):
         """Apply sorting to a query."""
+        if sort_by is not None and sort_by not in ALLOWED_SORT_COLUMNS:
+            raise ValueError(f"Invalid sort_by value: '{sort_by}'. Allowed columns: {sorted(ALLOWED_SORT_COLUMNS)}")
+
         if sort_by:
             sort_column = getattr(model, sort_by, None)
             if sort_column is not None:
