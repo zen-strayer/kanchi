@@ -1,4 +1,5 @@
 import logging
+import time
 from datetime import UTC, datetime
 
 from connection_manager import ConnectionManager
@@ -90,11 +91,10 @@ class EventHandler:
                     exc,
                 )
 
-            with self.db_manager.get_session() as session:
-                if worker_event.event_type == EventType.WORKER_OFFLINE.value:
-                    logger.info(f"Worker {worker_event.hostname} went offline, marking tasks as orphaned")
-                    orphaned_at = datetime.now(UTC)
-                    self._mark_tasks_as_orphaned(session, worker_event.hostname, orphaned_at)
+            if worker_event.event_type == EventType.WORKER_OFFLINE.value:
+                logger.info(f"Worker {worker_event.hostname} went offline, marking tasks as orphaned")
+                orphaned_at = datetime.now(UTC)
+                self._mark_tasks_as_orphaned(worker_event.hostname, orphaned_at)
 
             self.connection_manager.queue_worker_broadcast(worker_event)
 
@@ -104,21 +104,19 @@ class EventHandler:
         except Exception as e:
             logger.error(f"Error handling worker event {worker_event.hostname}: {e}", exc_info=True)
 
-    def _mark_tasks_as_orphaned(self, session, hostname: str, orphaned_at: datetime, grace_period_seconds: int = 2):
+    def _mark_tasks_as_orphaned(self, hostname: str, orphaned_at: datetime, grace_period_seconds: int = 2):
         try:
-            import time
-
             if grace_period_seconds > 0:
                 time.sleep(grace_period_seconds)
 
-            orphan_service = OrphanDetectionService(session)
-            orphaned_tasks = orphan_service.find_and_mark_orphaned_tasks(
-                hostname=hostname, orphaned_at=orphaned_at, grace_period_seconds=grace_period_seconds
-            )
+            with self.db_manager.get_session() as session:
+                orphan_service = OrphanDetectionService(session)
+                orphaned_tasks = orphan_service.find_and_mark_orphaned_tasks(
+                    hostname=hostname, orphaned_at=orphaned_at, grace_period_seconds=grace_period_seconds
+                )
 
-            if orphaned_tasks:
-                orphan_service.broadcast_orphan_events(orphaned_tasks, orphaned_at, self.connection_manager)
+                if orphaned_tasks:
+                    orphan_service.broadcast_orphan_events(orphaned_tasks, orphaned_at, self.connection_manager)
 
         except Exception as e:
             logger.error(f"Error marking tasks as orphaned for worker {hostname}: {e}", exc_info=True)
-            session.rollback()
