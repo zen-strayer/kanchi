@@ -22,6 +22,7 @@ class TestOrphanSleepSessionOrdering(unittest.TestCase):
     def test_mark_tasks_as_orphaned_does_not_accept_session_parameter(self):
         """Signature must be (self, hostname, orphaned_at, grace_period_seconds=2) — no session arg."""
         import inspect
+
         handler = self._make_handler()
         sig = inspect.signature(handler._mark_tasks_as_orphaned)
         params = list(sig.parameters.keys())
@@ -52,8 +53,7 @@ class TestOrphanSleepSessionOrdering(unittest.TestCase):
         """grace_period_seconds=0 must not call time.sleep at all."""
         handler = self._make_handler()
 
-        with patch("time.sleep") as mock_sleep, \
-             patch("event_handler.OrphanDetectionService") as mock_ods:
+        with patch("time.sleep") as mock_sleep, patch("event_handler.OrphanDetectionService") as mock_ods:
             mock_ods.return_value.find_and_mark_orphaned_tasks.return_value = []
             handler._mark_tasks_as_orphaned("worker1", datetime.now(UTC), grace_period_seconds=0)
             mock_sleep.assert_not_called()
@@ -75,8 +75,7 @@ class TestOrphanSleepSessionOrdering(unittest.TestCase):
 
         def fake_mark(hostname, orphaned_at, grace_period_seconds=2):
             orphan_call_order.append("orphan_mark")
-            self.assertEqual(session_context_active, [],
-                "Session must already be closed when orphan marking starts")
+            self.assertEqual(session_context_active, [], "Session must already be closed when orphan marking starts")
 
         handler._mark_tasks_as_orphaned = fake_mark
 

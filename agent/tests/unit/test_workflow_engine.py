@@ -12,7 +12,6 @@ from services.workflow_engine import WorkflowEngine
 
 
 class TestWorkflowEngineThreadPool(unittest.TestCase):
-
     def setUp(self):
         self.db_manager = MagicMock()
 
@@ -39,8 +38,10 @@ class TestWorkflowEngineThreadPool(unittest.TestCase):
         mock_event.event_type = "task-succeeded"
         mock_event.model_dump.return_value = {}
 
-        with patch.object(engine._executor, "submit") as mock_submit, \
-             patch("services.workflow_engine.EVENT_TRIGGER_MAP", {"task-succeeded": "task.succeeded"}):
+        with (
+            patch.object(engine._executor, "submit") as mock_submit,
+            patch("services.workflow_engine.EVENT_TRIGGER_MAP", {"task-succeeded": "task.succeeded"}),
+        ):
             engine.process_event(mock_event)
             mock_submit.assert_called_once()
 
@@ -51,8 +52,10 @@ class TestWorkflowEngineThreadPool(unittest.TestCase):
         mock_event = MagicMock()
         mock_event.event_type = "unknown-event-xyz"
 
-        with patch.object(engine._executor, "submit") as mock_submit, \
-             patch("services.workflow_engine.EVENT_TRIGGER_MAP", {}):
+        with (
+            patch.object(engine._executor, "submit") as mock_submit,
+            patch("services.workflow_engine.EVENT_TRIGGER_MAP", {}),
+        ):
             engine.process_event(mock_event)
             mock_submit.assert_not_called()
 

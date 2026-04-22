@@ -10,7 +10,6 @@ from config import Config
 
 
 class TestConfigBrokerValidation(unittest.TestCase):
-
     def test_missing_broker_url_raises_value_error(self):
         """Config must raise ValueError with a helpful message when broker_url is None."""
         with self.assertRaises(ValueError) as ctx:
