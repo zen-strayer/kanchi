@@ -1,3 +1,5 @@
+"""Tests for WorkflowEngine bounded ThreadPoolExecutor behavior."""
+
 import os
 import sys
 import unittest
@@ -60,18 +62,16 @@ class TestWorkflowEngineThreadPool(unittest.TestCase):
         engine.shutdown()  # must not raise
 
     def test_shutdown_prevents_new_submissions(self):
-        """After shutdown(), submitting work must not raise — executor rejects silently via wait=True."""
+        """After shutdown(), process_event must not raise — RuntimeError is caught and logged."""
         engine = WorkflowEngine(self.db_manager)
         engine.shutdown()
-        # Calling process_event after shutdown must not crash the process
         mock_event = MagicMock()
         mock_event.event_type = "task-succeeded"
         mock_event.model_dump.return_value = {}
         with patch("services.workflow_engine.EVENT_TRIGGER_MAP", {"task-succeeded": "task.succeeded"}):
-            try:
+            with self.assertLogs("services.workflow_engine", level="ERROR") as cm:
                 engine.process_event(mock_event)
-            except RuntimeError:
-                pass  # executor raises RuntimeError after shutdown — that's acceptable
+            self.assertTrue(any("Error processing" in line for line in cm.output))
 
 
 class TestWorkflowEngineSingleExecutorInstance(unittest.TestCase):

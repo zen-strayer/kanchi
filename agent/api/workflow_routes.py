@@ -141,17 +141,19 @@ def create_router(app_state) -> APIRouter:  # noqa: C901
 
         # Create workflow engine instance
         engine = WorkflowEngine(db_manager=app_state.db_manager, monitor_instance=app_state.monitor_instance)
+        try:
+            # Evaluate conditions
+            conditions_met = engine._evaluate_conditions(workflow, test_context)
 
-        # Evaluate conditions
-        conditions_met = engine._evaluate_conditions(workflow, test_context)
-
-        return {
-            "workflow_id": workflow_id,
-            "workflow_name": workflow.name,
-            "test_context": test_context,
-            "conditions_met": conditions_met,
-            "would_execute": conditions_met,
-            "actions": [action.type for action in workflow.actions],
-        }
+            return {
+                "workflow_id": workflow_id,
+                "workflow_name": workflow.name,
+                "test_context": test_context,
+                "conditions_met": conditions_met,
+                "would_execute": conditions_met,
+                "actions": [action.type for action in workflow.actions],
+            }
+        finally:
+            engine.shutdown(wait=False)
 
     return router
