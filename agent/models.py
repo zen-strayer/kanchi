@@ -570,6 +570,7 @@ class SubscribeMessage(BaseModel):
 
     type: Literal["subscribe"] = "subscribe"
     filters: dict[str, list[str]] | None = Field(default_factory=dict)
+    environment_id: str | None = None
 
 
 class SetModeMessage(BaseModel):
@@ -601,6 +602,14 @@ class StoredEventsResponse(BaseModel):
     type: Literal["stored_events_sent"] = "stored_events_sent"
     count: int
     timestamp: datetime
+
+
+class WebSocketErrorResponse(BaseModel):
+    """WebSocket error response sent when a request cannot be fulfilled."""
+
+    type: Literal["error"] = "error"
+    message: str
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class ConditionOperator(StrEnum):

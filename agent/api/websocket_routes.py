@@ -19,12 +19,91 @@ from models import (
     SubscribeMessage,
     SubscriptionResponse,
     TaskEvent,
+    WebSocketErrorResponse,
 )
 from security.auth import AuthError
 from security.tokens import TokenError
 from services.auth_service import AuthService
 
 logger = logging.getLogger(__name__)
+
+GET_STORED_LIMIT_MAX = 10_000
+GET_STORED_LIMIT_DEFAULT = 1_000
+
+
+async def _handle_get_stored_impl(app_state, websocket: WebSocket, message: dict):
+    """Handle get_stored WebSocket message with limit validation.
+
+    Args:
+        app_state: Application state containing db_manager and connection_manager
+        websocket: WebSocket connection
+        message: The incoming message dict with optional 'limit' key
+    """
+    raw_limit = message.get("limit")
+    if raw_limit is None:
+        limit = GET_STORED_LIMIT_DEFAULT
+    elif not isinstance(raw_limit, int) or raw_limit < 1:
+        error_response = WebSocketErrorResponse(message=f"limit must be a positive integer. Got: {raw_limit!r}.")
+        await app_state.connection_manager.send_personal_message(error_response.model_dump_json(), websocket)
+        return
+    else:
+        limit = raw_limit
+
+    if limit > GET_STORED_LIMIT_MAX:
+        error_response = WebSocketErrorResponse(
+            message=f"limit exceeds maximum allowed value of {GET_STORED_LIMIT_MAX}. Requested: {limit}."
+        )
+        await app_state.connection_manager.send_personal_message(error_response.model_dump_json(), websocket)
+        return
+
+    events_sent = 0
+
+    if app_state.db_manager:
+        from services import TaskService
+
+        env = app_state.connection_manager.client_environments.get(websocket)
+        with app_state.db_manager.get_session() as session:
+            task_service = TaskService(session, active_env=None)
+            recent_data = task_service.get_recent_events(limit=limit, page=0)
+            for event_data in recent_data["data"]:
+                filters = app_state.connection_manager.client_filters.get(websocket, {})
+                if not _matches_filters(event_data, filters):
+                    continue
+                if not app_state.connection_manager._matches_environment(event_data, env):
+                    continue
+                await app_state.connection_manager.send_personal_message(event_data.model_dump_json(), websocket)
+                events_sent += 1
+
+    stored_response = StoredEventsResponse(count=events_sent, timestamp=datetime.now(UTC))
+    await app_state.connection_manager.send_personal_message(stored_response.model_dump_json(), websocket)
+
+
+async def _handle_set_mode_impl(app_state, websocket: WebSocket, message: dict[str, Any]):
+    """Core logic for set_mode — extracted for testability."""
+    mode = message.get("mode", "live")
+    app_state.connection_manager.set_client_mode(websocket, mode)
+
+    events_sent = 0
+    if mode == "static" and app_state.db_manager:
+        from services import TaskService
+
+        env = app_state.connection_manager.client_environments.get(websocket)
+        with app_state.db_manager.get_session() as session:
+            task_service = TaskService(session, active_env=None)
+            recent_data = task_service.get_recent_events(limit=100, page=0)
+            for event_data in recent_data["data"]:
+                filters = app_state.connection_manager.client_filters.get(websocket, {})
+                if not _matches_filters(event_data, filters):
+                    continue
+                if not app_state.connection_manager._matches_environment(event_data, env):
+                    continue
+                await app_state.connection_manager.send_personal_message(event_data.model_dump_json(), websocket)
+                events_sent += 1
+
+    mode_response = ModeChangedResponse(
+        mode=mode, timestamp=datetime.now(UTC), events_count=events_sent if mode == "static" else None
+    )
+    await app_state.connection_manager.send_personal_message(mode_response.model_dump_json(), websocket)
 
 
 def _matches_filters(event_data: Any, filters: dict[str, Any]) -> bool:
@@ -119,7 +198,25 @@ def create_router(app_state) -> APIRouter:  # noqa: C901
 
                     elif message.get("type") == "subscribe":
                         filters = message.get("filters", {})
+                        environment_id = message.get("environment_id")
+
                         app_state.connection_manager.set_client_filters(websocket, filters)
+
+                        if environment_id and app_state.db_manager:
+                            from database import EnvironmentDB
+
+                            with app_state.db_manager.get_session() as session:
+                                env_db = (
+                                    session.query(EnvironmentDB).filter_by(id=environment_id, is_active=True).first()
+                                )
+                                if env_db:
+                                    app_state.connection_manager.set_client_environment(
+                                        websocket,
+                                        queue_patterns=env_db.queue_patterns or [],
+                                        worker_patterns=env_db.worker_patterns or [],
+                                    )
+                                else:
+                                    app_state.connection_manager.set_client_environment(websocket, [], [])
 
                         response = SubscriptionResponse(
                             status="acknowledged", filters=filters, timestamp=datetime.now(UTC)
@@ -140,58 +237,11 @@ def create_router(app_state) -> APIRouter:  # noqa: C901
 
     async def handle_set_mode(websocket: WebSocket, message: dict[str, Any]):
         """Handle set_mode WebSocket message."""
-        mode = message.get("mode", "live")
-        app_state.connection_manager.set_client_mode(websocket, mode)
-
-        events_sent = 0
-        if mode == "static" and app_state.db_manager:
-            from services import TaskService
-
-            with app_state.db_manager.get_session() as session:
-                # NOTE: WebSocket connections don't have session ID in the handshake
-                # Environment filtering is handled on the client side via useEnvironmentMatcher
-                # The backend sends all events and the frontend filters them
-                task_service = TaskService(session, active_env=None)
-                recent_data = task_service.get_recent_events(limit=100, page=0)
-                for event_data in recent_data["data"]:
-                    filters = app_state.connection_manager.client_filters.get(websocket, {})
-                    # Apply client filters
-                    if _matches_filters(event_data, filters):
-                        await app_state.connection_manager.send_personal_message(
-                            event_data.model_dump_json(), websocket
-                        )
-                        events_sent += 1
-
-        mode_response = ModeChangedResponse(
-            mode=mode, timestamp=datetime.now(UTC), events_count=events_sent if mode == "static" else None
-        )
-        await app_state.connection_manager.send_personal_message(mode_response.model_dump_json(), websocket)
+        await _handle_set_mode_impl(app_state, websocket, message)
 
     async def handle_get_stored(websocket: WebSocket, message: dict[str, Any]):
         """Handle get_stored WebSocket message."""
-        limit = message.get("limit", 1000)
-        events_sent = 0
-
-        if app_state.db_manager:
-            from services import TaskService
-
-            with app_state.db_manager.get_session() as session:
-                # NOTE: WebSocket connections don't have session ID in the handshake
-                # Environment filtering is handled on the client side via useEnvironmentMatcher
-                # The backend sends all events and the frontend filters them
-                task_service = TaskService(session, active_env=None)
-                recent_data = task_service.get_recent_events(limit=limit, page=0)
-                for event_data in recent_data["data"]:
-                    filters = app_state.connection_manager.client_filters.get(websocket, {})
-                    # Apply client filters
-                    if _matches_filters(event_data, filters):
-                        await app_state.connection_manager.send_personal_message(
-                            event_data.model_dump_json(), websocket
-                        )
-                        events_sent += 1
-
-        stored_response = StoredEventsResponse(count=events_sent, timestamp=datetime.now(UTC))
-        await app_state.connection_manager.send_personal_message(stored_response.model_dump_json(), websocket)
+        await _handle_get_stored_impl(app_state, websocket, message)
 
     @router.get("/api/websocket/message-types")
     async def get_websocket_message_types():

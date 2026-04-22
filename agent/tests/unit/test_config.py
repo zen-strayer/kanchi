@@ -42,5 +42,23 @@ class TestConfigBrokerValidation(unittest.TestCase):
         self.assertIn("None", broker_annotation)
 
 
+class TestConfigRetentionValidation(unittest.TestCase):
+    def test_negative_retention_days_raises_value_error(self):
+        """DATA_RETENTION_DAYS must not be negative — that would delete all data."""
+        with self.assertRaises(ValueError) as ctx:
+            Config(broker_url="redis://localhost:6379/0", data_retention_days=-1)
+        self.assertIn("DATA_RETENTION_DAYS", str(ctx.exception))
+
+    def test_zero_retention_days_is_accepted(self):
+        """DATA_RETENTION_DAYS=0 disables pruning — must not raise."""
+        config = Config(broker_url="redis://localhost:6379/0", data_retention_days=0)
+        self.assertEqual(config.data_retention_days, 0)
+
+    def test_positive_retention_days_is_accepted(self):
+        """A positive value for DATA_RETENTION_DAYS must not raise."""
+        config = Config(broker_url="redis://localhost:6379/0", data_retention_days=30)
+        self.assertEqual(config.data_retention_days, 30)
+
+
 if __name__ == "__main__":
     unittest.main()

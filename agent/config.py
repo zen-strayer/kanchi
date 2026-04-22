@@ -73,6 +73,7 @@ class Config:
     # Performance settings
     max_clients: int = int(os.getenv("MAX_WS_CLIENTS", 100))
     event_buffer_size: int = int(os.getenv("EVENT_BUFFER_SIZE", 1000))
+    data_retention_days: int = int(os.getenv("DATA_RETENTION_DAYS", 30))
 
     # CORS / Hosts
     allowed_origins: list[str] = field(default_factory=lambda: _split_csv(os.getenv("ALLOWED_ORIGINS")))
@@ -133,3 +134,9 @@ class Config:
         if self.token_secret_key == "change-me":
             # Default to the session secret to preserve existing behaviour.
             self.token_secret_key = self.session_secret_key
+
+        if self.data_retention_days < 0:
+            raise ValueError(
+                "DATA_RETENTION_DAYS must be >= 0. "
+                "Use 0 to disable retention pruning, or a positive integer for the retention window in days."
+            )
