@@ -63,6 +63,8 @@ class RetentionBackgroundTask:
         if self.retention_days == 0:
             logger.info("Data retention disabled (DATA_RETENTION_DAYS=0)")
             return
+        if self._task is not None and not self._task.done():
+            return
         self._task = asyncio.create_task(self._run_loop())
         logger.info("Retention background task started (retention_days=%d)", self.retention_days)
 
