@@ -54,6 +54,8 @@ async def lifespan(app: FastAPI):
     await initialize_application()
     yield
     # Shutdown
+    if app_state.workflow_engine:
+        app_state.workflow_engine.shutdown(wait=True)
     if app_state.health_monitor:
         app_state.health_monitor.stop()
     if app_state.connection_manager:

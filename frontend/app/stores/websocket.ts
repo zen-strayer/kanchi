@@ -229,6 +229,14 @@ export const useWebSocketStore = defineStore('websocket', () => {
         disconnect()
       }
     }, { immediate: true })
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && !isConnected.value && !isConnecting.value) {
+        reconnectAttempts.value = 0
+        reconnectDelay.value = 1000
+        connect()
+      }
+    })
   }
 
   return {

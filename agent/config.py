@@ -53,7 +53,7 @@ class Config:
     """Configuration for the Celery WebSocket Bridge"""
 
     # Celery broker configuration (supports both RabbitMQ and Redis)
-    broker_url: str = os.getenv("CELERY_BROKER_URL")
+    broker_url: str | None = os.getenv("CELERY_BROKER_URL")
 
     # Database configuration
     database_url: str = os.getenv("DATABASE_URL", "sqlite:///kanchi.db")  # Default to SQLite
@@ -120,7 +120,13 @@ class Config:
         return cls()
 
     def __post_init__(self) -> None:
-        """Normalize secrets so we never operate with predictable defaults."""
+        """Validate broker URL and normalize secrets so we never operate with predictable defaults."""
+        if not self.broker_url:
+            raise ValueError(
+                "CELERY_BROKER_URL environment variable is required but was not set. "
+                "Examples: redis://localhost:6379/0  or  amqp://guest:guest@localhost:5672//"
+            )
+
         if self.session_secret_key == "change-me":
             self.session_secret_key = secrets.token_urlsafe(32)
 
