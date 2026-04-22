@@ -86,9 +86,15 @@ export const useWebSocketStore = defineStore('websocket', () => {
         }
       }
 
-      ws.value.onclose = () => {
+      ws.value.onclose = (event) => {
         isConnected.value = false
         isConnecting.value = false
+
+        if (event.code === 4401) {
+          // Auth rejected — do not reconnect; the auth store should handle re-login
+          error.value = 'WebSocket authentication failed'
+          return
+        }
 
         if (canReconnect.value) {
           setTimeout(() => {

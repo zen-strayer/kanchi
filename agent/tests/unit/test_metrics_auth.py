@@ -66,3 +66,12 @@ class TestMetricsAuth(unittest.TestCase):
         client = self._get_client(_make_app_state(auth_enabled=False))
         resp = client.get("/metrics")
         self.assertIn("text/plain", resp.headers.get("content-type", ""))
+
+    def test_metrics_returns_503_when_auth_enabled_but_dependencies_missing(self):
+        """GET /metrics must return 503 when auth_enabled=True but auth_dependencies is None."""
+        app_state = MagicMock()
+        app_state.config.auth_enabled = True
+        app_state.auth_dependencies = None
+        client = self._get_client(app_state)
+        resp = client.get("/metrics")
+        self.assertEqual(resp.status_code, 503)
