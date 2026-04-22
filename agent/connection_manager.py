@@ -22,7 +22,7 @@ class ConnectionManager:
         task_inactive = self._broadcast_task is None or self._broadcast_task.done()
         if task_inactive and not self._running:
             self._running = True
-            self._loop = asyncio.get_event_loop()
+            self._loop = asyncio.get_running_loop()
             self.message_queue = asyncio.Queue()
             self._broadcast_task = asyncio.create_task(self._background_broadcaster())
             logger.info("Background broadcaster started")
