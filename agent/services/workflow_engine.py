@@ -3,7 +3,7 @@
 import asyncio
 import logging
 import re
-import threading
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from models import Condition, ConditionOperator, TaskEvent, WorkerEvent, WorkflowDefinition
@@ -17,9 +17,14 @@ logger = logging.getLogger(__name__)
 class WorkflowEngine:
     """Engine for processing events and triggering workflows."""
 
-    def __init__(self, db_manager, monitor_instance=None):
+    def __init__(self, db_manager, monitor_instance=None, max_workers: int = 10):
         self.db_manager = db_manager
         self.monitor_instance = monitor_instance
+        self._executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="workflow")
+
+    def shutdown(self, wait: bool = True):
+        """Shut down the thread pool. Call during application teardown."""
+        self._executor.shutdown(wait=wait)
 
     def process_event(self, event: TaskEvent | WorkerEvent):
         """
@@ -36,13 +41,10 @@ class WorkflowEngine:
 
             context = event.model_dump()
 
-            thread = threading.Thread(
-                target=self._run_async_workflow_evaluation, args=(trigger_type, context, event), daemon=True
-            )
-            thread.start()
+            self._executor.submit(self._run_async_workflow_evaluation, trigger_type, context, event)
 
         except Exception as e:
-            logger.error(f"Error processing event for workflows: {e}", exc_info=True)
+            logger.error("Error processing event for workflows: %s", e, exc_info=True)
 
     def _run_async_workflow_evaluation(
         self, trigger_type: str, context: dict[str, Any], event: TaskEvent | WorkerEvent
@@ -51,7 +53,7 @@ class WorkflowEngine:
         try:
             asyncio.run(self._evaluate_and_execute_workflows(trigger_type, context, event))
         except Exception as e:
-            logger.error(f"Error running workflow evaluation: {e}", exc_info=True)
+            logger.error("Error running workflow evaluation: %s", e, exc_info=True)
 
     async def _evaluate_and_execute_workflows(
         self, trigger_type: str, context: dict[str, Any], event: TaskEvent | WorkerEvent
@@ -65,26 +67,26 @@ class WorkflowEngine:
             if not workflows:
                 return
 
-            logger.debug(f"Found {len(workflows)} workflows for trigger {trigger_type}")
+            logger.debug("Found %d workflows for trigger %s", len(workflows), trigger_type)
 
             for workflow in workflows:
                 try:
                     can_execute, reason = workflow_service.can_execute_workflow(workflow.id)
 
                     if not can_execute:
-                        logger.debug(f"Skipping workflow {workflow.name}: {reason}")
+                        logger.debug("Skipping workflow %s: %s", workflow.name, reason)
                         continue
 
                     if not self._evaluate_conditions(workflow, context):
-                        logger.debug(f"Workflow conditions not met: {workflow.name}")
+                        logger.debug("Workflow conditions not met: %s", workflow.name)
                         continue
 
-                    logger.info(f"Executing workflow: {workflow.name} (trigger={trigger_type})")
+                    logger.info("Executing workflow: %s (trigger=%s)", workflow.name, trigger_type)
 
                     cb_state = workflow_service.is_circuit_breaker_open(workflow, context)
 
                     if cb_state.is_open:
-                        logger.warning(f"Circuit breaker skipped workflow {workflow.name}: {cb_state.reason}")
+                        logger.warning("Circuit breaker skipped workflow %s: %s", workflow.name, cb_state.reason)
                         workflow_service.record_circuit_breaker_skip(
                             workflow=workflow,
                             trigger_type=trigger_type,
@@ -102,7 +104,7 @@ class WorkflowEngine:
                     await executor.execute_workflow(workflow, context, event, circuit_breaker_key=cb_state.key)
 
                 except Exception as e:
-                    logger.error(f"Error evaluating workflow {workflow.name}: {e}", exc_info=True)
+                    logger.error("Error evaluating workflow %s: %s", workflow.name, e, exc_info=True)
 
     def _evaluate_conditions(self, workflow: WorkflowDefinition, context: dict[str, Any]) -> bool:
         if not workflow.conditions:
@@ -171,9 +173,9 @@ class WorkflowEngine:
                 return str(field_value).endswith(expected_value)
 
             else:
-                logger.warning(f"Unknown operator: {operator}")
+                logger.warning("Unknown operator: %s", operator)
                 return False
 
         except Exception as e:
-            logger.error(f"Error evaluating condition: {e}", exc_info=True)
+            logger.error("Error evaluating condition: %s", e, exc_info=True)
             return False
