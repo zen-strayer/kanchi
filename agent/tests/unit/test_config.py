@@ -60,5 +60,50 @@ class TestConfigRetentionValidation(unittest.TestCase):
         self.assertEqual(config.data_retention_days, 30)
 
 
+class TestConfigOAuthEmailPatternValidation(unittest.TestCase):
+    def test_google_oauth_enabled_without_email_patterns_raises(self):
+        """Enabling Google OAuth without ALLOWED_EMAIL_PATTERNS must raise ValueError."""
+        with self.assertRaises(ValueError) as ctx:
+            Config(
+                broker_url="redis://localhost:6379/0",
+                auth_enabled=True,
+                auth_google_enabled=True,
+                allowed_email_patterns=[],
+            )
+        self.assertIn("ALLOWED_EMAIL_PATTERNS", str(ctx.exception))
+
+    def test_github_oauth_enabled_without_email_patterns_raises(self):
+        """Enabling GitHub OAuth without ALLOWED_EMAIL_PATTERNS must raise ValueError."""
+        with self.assertRaises(ValueError) as ctx:
+            Config(
+                broker_url="redis://localhost:6379/0",
+                auth_enabled=True,
+                auth_github_enabled=True,
+                allowed_email_patterns=[],
+            )
+        self.assertIn("ALLOWED_EMAIL_PATTERNS", str(ctx.exception))
+
+    def test_oauth_enabled_with_email_patterns_does_not_raise(self):
+        """OAuth with ALLOWED_EMAIL_PATTERNS set must not raise."""
+        config = Config(
+            broker_url="redis://localhost:6379/0",
+            auth_enabled=True,
+            auth_google_enabled=True,
+            allowed_email_patterns=["*@example.com"],
+        )
+        self.assertEqual(config.allowed_email_patterns, ["*@example.com"])
+
+    def test_oauth_disabled_empty_patterns_does_not_raise(self):
+        """Empty ALLOWED_EMAIL_PATTERNS with OAuth disabled must not raise."""
+        config = Config(
+            broker_url="redis://localhost:6379/0",
+            auth_enabled=False,
+            auth_google_enabled=False,
+            auth_github_enabled=False,
+            allowed_email_patterns=[],
+        )
+        self.assertEqual(config.allowed_email_patterns, [])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -147,3 +147,10 @@ class Config:
                 "Pickle deserialization allows arbitrary code execution via malicious broker payloads. "
                 "Only enable this when ALL message producers are fully trusted."
             )
+
+        if (self.auth_google_enabled or self.auth_github_enabled) and not self.allowed_email_patterns:
+            raise ValueError(
+                "ALLOWED_EMAIL_PATTERNS must be set when OAuth is enabled. "
+                "Without it, any Google or GitHub account can log in. "
+                "Example: ALLOWED_EMAIL_PATTERNS=*@yourcompany.com"
+            )
