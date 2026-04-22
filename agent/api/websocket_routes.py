@@ -1,5 +1,6 @@
 """WebSocket routes and related endpoints."""
 
+import asyncio
 import json
 import logging
 from datetime import UTC, datetime
@@ -172,8 +173,11 @@ def create_router(app_state) -> APIRouter:  # noqa: C901
                 await websocket.accept()
                 already_accepted = True
                 try:
-                    raw = await websocket.receive_text()
+                    raw = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
                     first_msg = json.loads(raw)
+                except TimeoutError:
+                    await websocket.close(code=4401, reason="Authentication timeout")
+                    return
                 except Exception:
                     await websocket.close(code=4401, reason="Authentication required")
                     return
@@ -193,13 +197,7 @@ def create_router(app_state) -> APIRouter:  # noqa: C901
                 return
 
         if already_accepted:
-            # Socket already accepted during first-message auth — register without re-accepting
-            app_state.connection_manager.active_connections.append(websocket)
-            app_state.connection_manager.client_filters[websocket] = {}
-            app_state.connection_manager.client_modes[websocket] = "live"
-            app_state.connection_manager.client_environments[websocket] = None
-            if len(app_state.connection_manager.active_connections) == 1:
-                app_state.connection_manager.start_background_broadcaster()
+            app_state.connection_manager.register_accepted(websocket)
         else:
             await app_state.connection_manager.connect(websocket)
 

@@ -68,6 +68,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
         reconnectAttempts.value = 0
         reconnectDelay.value = 1000
 
+        // auth must be sent first — server closes connection if first message is not auth
         if (authEnabled.value && accessToken.value) {
           sendMessage({ type: 'auth', token: accessToken.value })
         }
