@@ -1268,7 +1268,7 @@ class TaskService:
 
     def _apply_sorting(self, query, sort_by: str | None, sort_order: str, model=TaskEventDB):
         """Apply sorting to a query."""
-        if sort_by is not None and sort_by not in ALLOWED_SORT_COLUMNS:
+        if sort_by is not None and sort_by != "" and sort_by not in ALLOWED_SORT_COLUMNS:
             raise ValueError(f"Invalid sort_by value: '{sort_by}'. Allowed columns: {sorted(ALLOWED_SORT_COLUMNS)}")
 
         if sort_by:

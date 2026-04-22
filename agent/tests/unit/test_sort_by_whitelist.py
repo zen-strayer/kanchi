@@ -50,3 +50,11 @@ class TestSortByWhitelist(DatabaseTestCase):
             query = self.session.query(TaskEventDB)
             result = self.task_service._apply_sorting(query, col, "asc")
             self.assertIsNotNone(result, f"Column '{col}' raised unexpectedly")
+
+    def test_empty_string_sort_by_does_not_raise(self):
+        """sort_by='' must fall through to default ordering, not raise ValueError."""
+        from database import TaskEventDB
+
+        query = self.session.query(TaskEventDB)
+        result = self.task_service._apply_sorting(query, "", "desc")
+        self.assertIsNotNone(result)
