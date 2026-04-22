@@ -140,3 +140,21 @@ class Config:
                 "DATA_RETENTION_DAYS must be >= 0. "
                 "Use 0 to disable retention pruning, or a positive integer for the retention window in days."
             )
+
+        if self.enable_pickle_serialization:
+            logger.critical(
+                "SECURITY WARNING: ENABLE_PICKLE_SERIALIZATION=true. "
+                "Pickle deserialization allows arbitrary code execution via malicious broker payloads. "
+                "Only enable this when ALL message producers are fully trusted."
+            )
+
+        if (
+            self.auth_enabled
+            and (self.auth_google_enabled or self.auth_github_enabled)
+            and not self.allowed_email_patterns
+        ):
+            raise ValueError(
+                "ALLOWED_EMAIL_PATTERNS must be set when OAuth is enabled. "
+                "Without it, any Google or GitHub account can log in. "
+                "Example: ALLOWED_EMAIL_PATTERNS=*@yourcompany.com"
+            )

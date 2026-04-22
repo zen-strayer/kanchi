@@ -22,6 +22,8 @@ RUN apt-get update && apt-get install -y curl \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
+RUN groupadd --system kanchi && useradd --system --gid kanchi --no-create-home kanchi
+
 WORKDIR /app
 
 COPY agent/pyproject.toml agent/uv.lock ./agent/
@@ -40,7 +42,6 @@ RUN npm ci --production
 
 WORKDIR /app
 
-ENV CELERY_BROKER_URL=amqp://guest:guest@localhost:5672//
 ENV WS_HOST=0.0.0.0
 ENV WS_PORT=8765
 ENV LOG_LEVEL=INFO
@@ -54,5 +55,8 @@ RUN echo '#!/bin/bash\n\
 cd /app/agent && python main.py &\n\
 cd /app/frontend && npm run preview &\n\
 wait' > /app/start.sh && chmod +x /app/start.sh
+
+RUN chown -R kanchi:kanchi /app
+USER kanchi
 
 CMD ["/app/start.sh"]

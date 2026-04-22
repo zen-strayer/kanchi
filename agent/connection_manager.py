@@ -60,6 +60,16 @@ class ConnectionManager:
             self._broadcast_task = None
         self.message_queue = None
 
+    def register_accepted(self, websocket: WebSocket) -> None:
+        """Register a WebSocket that has already been accepted (e.g. during first-message auth)."""
+        self.active_connections.append(websocket)
+        self.client_filters[websocket] = {}
+        self.client_modes[websocket] = "live"
+        self.client_environments[websocket] = None
+        logger.info(f"Client connected (pre-accepted). Total connections: {len(self.active_connections)}")
+        if len(self.active_connections) == 1:
+            self.start_background_broadcaster()
+
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
         self.active_connections.append(websocket)

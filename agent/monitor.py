@@ -38,8 +38,10 @@ class CeleryEventMonitor:
 
         if allow_pickle_serialization:
             self.app.conf.accept_content.append("application/x-python-serialize")
-            logger.warning(
-                "Pickle deserialization ENABLED for Celery monitor; only use when all message producers are trusted."
+            logger.critical(
+                "SECURITY WARNING: Pickle deserialization ENABLED for Celery monitor. "
+                "This allows arbitrary code execution via malicious broker payloads. "
+                "Only use when ALL message producers are fully trusted."
             )
 
         self.state = None

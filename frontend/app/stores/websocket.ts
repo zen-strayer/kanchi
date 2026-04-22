@@ -60,16 +60,6 @@ export const useWebSocketStore = defineStore('websocket', () => {
       const config = useRuntimeConfig()
       let wsUrl = config.public.wsUrl as string
 
-      if (authEnabled.value && accessToken.value) {
-        try {
-          const parsed = new URL(wsUrl)
-          parsed.searchParams.set('token', accessToken.value)
-          wsUrl = parsed.toString()
-        } catch (err) {
-          console.error('[WebSocket] Invalid WS URL:', err)
-        }
-      }
-
       ws.value = new WebSocket(wsUrl)
 
       ws.value.onopen = () => {
@@ -77,6 +67,11 @@ export const useWebSocketStore = defineStore('websocket', () => {
         isConnecting.value = false
         reconnectAttempts.value = 0
         reconnectDelay.value = 1000
+
+        // auth must be sent first — server closes connection if first message is not auth
+        if (authEnabled.value && accessToken.value) {
+          sendMessage({ type: 'auth', token: accessToken.value })
+        }
 
         sendMessage({ type: 'ping' })
         sendMessage({ type: 'set_mode', mode: clientMode.value })
@@ -91,9 +86,15 @@ export const useWebSocketStore = defineStore('websocket', () => {
         }
       }
 
-      ws.value.onclose = () => {
+      ws.value.onclose = (event) => {
         isConnected.value = false
         isConnecting.value = false
+
+        if (event.code === 4401) {
+          // Auth rejected — do not reconnect; the auth store should handle re-login
+          error.value = 'WebSocket authentication failed'
+          return
+        }
 
         if (canReconnect.value) {
           setTimeout(() => {
