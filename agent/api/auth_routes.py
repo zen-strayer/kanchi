@@ -2,8 +2,10 @@
 
 import json
 import logging
+from collections import defaultdict
 from collections.abc import Iterable
 from datetime import UTC, datetime
+from time import monotonic
 from urllib.parse import urljoin, urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
@@ -24,6 +26,19 @@ from security.auth import AuthenticatedUser, AuthError
 from services import AuthService
 
 logger = logging.getLogger(__name__)
+
+_login_attempts: dict[str, list[float]] = defaultdict(list)
+
+
+def _is_rate_limited(ip: str, max_attempts: int = 5, window_seconds: float = 60.0) -> bool:
+    """Return True if the request is allowed; False if the IP is rate-limited."""
+    now = monotonic()
+    recent = [t for t in _login_attempts[ip] if now - t < window_seconds]
+    _login_attempts[ip] = recent
+    if len(recent) >= max_attempts:
+        return False
+    _login_attempts[ip].append(now)
+    return True
 
 
 def create_router(app_state) -> APIRouter:  # noqa: C901
@@ -82,12 +97,21 @@ def create_router(app_state) -> APIRouter:  # noqa: C901
 
     @router.post("/basic/login", response_model=LoginResponse)
     async def basic_login(
+        request: Request,
         payload: BasicLoginRequest,
         auth_service: AuthService = Depends(require_auth_service),
         config: Config = Depends(get_config),
     ):
         if not config.auth_basic_enabled:
             raise HTTPException(status_code=404, detail="Basic authentication disabled")
+
+        client_ip = request.client.host if request.client else "unknown"
+        if not _is_rate_limited(client_ip):
+            raise HTTPException(
+                status_code=429,
+                detail="Too many login attempts. Please try again later.",
+                headers={"Retry-After": "60"},
+            )
 
         try:
             result = auth_service.basic_login(
