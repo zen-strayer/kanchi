@@ -603,6 +603,14 @@ class StoredEventsResponse(BaseModel):
     timestamp: datetime
 
 
+class WebSocketErrorResponse(BaseModel):
+    """WebSocket error response sent when a request cannot be fulfilled."""
+
+    type: Literal["error"] = "error"
+    message: str
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
 class ConditionOperator(StrEnum):
     """Supported condition operators."""
 
