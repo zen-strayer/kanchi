@@ -223,7 +223,7 @@ Every login issues short-lived access tokens plus refresh tokens. You can adjust
 ### Installation
 
 ```bash
-cd agent && poetry install
+cd agent && uv sync --all-groups
 cd ../frontend && npm install
 ```
 
@@ -236,7 +236,7 @@ make dev
 # Or manually:
 
 # Terminal 1: Backend
-cd agent && poetry run python app.py
+cd agent && uv run python app.py
 
 # Terminal 2: Frontend
 cd frontend && npm run dev
@@ -256,9 +256,9 @@ make test-mixed     # Generate test tasks
 
 ```bash
 cd agent
-poetry run black .              # Format
-poetry run ruff check .         # Lint
-poetry run alembic revision --autogenerate -m "description"  # Migration
+uv run ruff format .            # Format
+uv run ruff check .             # Lint
+uv run alembic revision --autogenerate -m "description"  # Migration
 ```
 
 ### Frontend

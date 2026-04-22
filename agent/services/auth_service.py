@@ -2,19 +2,18 @@
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Dict, Optional, Tuple
+from datetime import UTC, datetime
+from urllib.parse import urlencode, urlparse
 from uuid import uuid4
-from urllib.parse import urlencode, urlparse, urljoin
 
 import aiohttp
 from sqlalchemy.orm import Session
 
 from database import UserDB, UserSessionDB
 from security.auth import (
-    AuthManager,
-    AuthError,
     AuthenticatedUser,
+    AuthError,
+    AuthManager,
 )
 
 logger = logging.getLogger(__name__)
@@ -23,6 +22,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class LoginResult:
     """Result returned after a successful login/refresh."""
+
     user: UserDB
     session: UserSessionDB
     access_token: str
@@ -39,21 +39,19 @@ class AuthService:
         self.auth_manager = auth_manager
 
     @staticmethod
-    def _normalize_timestamp(value: Optional[datetime]) -> Optional[datetime]:
+    def _normalize_timestamp(value: datetime | None) -> datetime | None:
         """Return a timezone-aware timestamp (assumes UTC when naive)."""
         if value is None:
             return None
         if value.tzinfo is None:
-            return value.replace(tzinfo=timezone.utc)
+            return value.replace(tzinfo=UTC)
         return value
 
     # Core helpers
     def authenticate_access_token(self, token: str) -> AuthenticatedUser:
         payload = self.auth_manager.decode_access_token(token)
 
-        session_db = self.session.query(UserSessionDB).filter(
-            UserSessionDB.session_id == payload.session_id
-        ).first()
+        session_db = self.session.query(UserSessionDB).filter(UserSessionDB.session_id == payload.session_id).first()
         if not session_db or not session_db.user_id:
             raise AuthError("Session not found for token")
 
@@ -62,7 +60,7 @@ class AuthService:
 
         access_expiry = self._normalize_timestamp(session_db.access_token_expires_at)
 
-        if access_expiry and access_expiry <= datetime.now(timezone.utc):
+        if access_expiry and access_expiry <= datetime.now(UTC):
             raise AuthError("Access token expired")
 
         user = self.session.query(UserDB).filter(UserDB.id == payload.user_id).first()
@@ -72,7 +70,7 @@ class AuthService:
         if not user.is_active:
             raise AuthError("User is inactive")
 
-        session_db.last_active = datetime.now(timezone.utc)
+        session_db.last_active = datetime.now(UTC)
         session_db.access_token_expires_at = payload.expires_at
         self.session.commit()
 
@@ -87,9 +85,7 @@ class AuthService:
 
     def authenticate_refresh_token(self, token: str) -> UserSessionDB:
         payload = self.auth_manager.decode_refresh_token(token)
-        session_db = self.session.query(UserSessionDB).filter(
-            UserSessionDB.session_id == payload.session_id
-        ).first()
+        session_db = self.session.query(UserSessionDB).filter(UserSessionDB.session_id == payload.session_id).first()
         if not session_db or not session_db.user_id:
             raise AuthError("Session not found for refresh token")
 
@@ -98,15 +94,13 @@ class AuthService:
 
         refresh_expiry = self._normalize_timestamp(session_db.refresh_token_expires_at)
 
-        if refresh_expiry and refresh_expiry <= datetime.now(timezone.utc):
+        if refresh_expiry and refresh_expiry <= datetime.now(UTC):
             raise AuthError("Refresh token expired")
 
         return session_db
 
     def logout_session(self, session_id: str) -> None:
-        session_db = self.session.query(UserSessionDB).filter(
-            UserSessionDB.session_id == session_id
-        ).first()
+        session_db = self.session.query(UserSessionDB).filter(UserSessionDB.session_id == session_id).first()
         if not session_db:
             return
 
@@ -115,11 +109,11 @@ class AuthService:
         session_db.access_token_expires_at = None
         session_db.refresh_token_expires_at = None
         session_db.token_scopes = []
-        session_db.last_active = datetime.now(timezone.utc)
+        session_db.last_active = datetime.now(UTC)
         self.session.commit()
 
     # Login flows
-    def basic_login(self, username: str, password: str, session_id: Optional[str] = None) -> LoginResult:
+    def basic_login(self, username: str, password: str, session_id: str | None = None) -> LoginResult:
         if not self.auth_manager.verify_basic_credentials(username, password):
             raise AuthError("Invalid username or password")
 
@@ -139,9 +133,9 @@ class AuthService:
     async def build_oauth_authorization_url(
         self,
         provider: str,
-        redirect_to: Optional[str] = None,
-        session_id: Optional[str] = None,
-    ) -> Tuple[str, str]:
+        redirect_to: str | None = None,
+        session_id: str | None = None,
+    ) -> tuple[str, str]:
         provider_cfg = self.auth_manager.get_oauth_provider(provider)
         if not provider_cfg.is_available():
             raise AuthError(f"{provider_cfg.name.title()} OAuth is not configured")
@@ -174,8 +168,8 @@ class AuthService:
         provider: str,
         code: str,
         state: str,
-        session_id: Optional[str] = None,
-    ) -> Tuple[LoginResult, Optional[str]]:
+        session_id: str | None = None,
+    ) -> tuple[LoginResult, str | None]:
         provider_cfg = self.auth_manager.get_oauth_provider(provider)
         if not provider_cfg.is_available():
             raise AuthError(f"{provider_cfg.name.title()} OAuth is not configured")
@@ -194,12 +188,7 @@ class AuthService:
         if not self.auth_manager.is_email_allowed(email):
             raise AuthError("Email not allowed")
 
-        provider_account_id = str(
-            userinfo.get("sub")
-            or userinfo.get("id")
-            or userinfo.get("user_id")
-            or email
-        )
+        provider_account_id = str(userinfo.get("sub") or userinfo.get("id") or userinfo.get("user_id") or email)
 
         user = self._get_or_create_user(
             provider=provider_cfg.name,
@@ -239,7 +228,7 @@ class AuthService:
         session_db.refresh_token_hash = self.auth_manager.token_manager.hash_token(new_refresh_token)
         session_db.access_token_expires_at = access_exp
         session_db.refresh_token_expires_at = refresh_exp
-        session_db.last_active = datetime.now(timezone.utc)
+        session_db.last_active = datetime.now(UTC)
         self.session.commit()
 
         return LoginResult(
@@ -256,14 +245,12 @@ class AuthService:
         self,
         user: UserDB,
         provider: str,
-        scopes: Tuple[str, ...],
-        session_id: Optional[str] = None,
+        scopes: tuple[str, ...],
+        session_id: str | None = None,
     ) -> LoginResult:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if session_id:
-            session_db = self.session.query(UserSessionDB).filter(
-                UserSessionDB.session_id == session_id
-            ).first()
+            session_db = self.session.query(UserSessionDB).filter(UserSessionDB.session_id == session_id).first()
         else:
             session_db = None
 
@@ -322,16 +309,20 @@ class AuthService:
         self,
         provider: str,
         email: str,
-        name: Optional[str],
+        name: str | None,
         provider_account_id: str,
-        avatar_url: Optional[str],
+        avatar_url: str | None,
     ) -> UserDB:
-        user = self.session.query(UserDB).filter(
-            UserDB.email == email,
-            UserDB.provider == provider,
-        ).first()
+        user = (
+            self.session.query(UserDB)
+            .filter(
+                UserDB.email == email,
+                UserDB.provider == provider,
+            )
+            .first()
+        )
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if user:
             user.name = name or user.name
             user.provider_account_id = provider_account_id
@@ -355,7 +346,7 @@ class AuthService:
         self.session.refresh(user)
         return user
 
-    def _sanitize_redirect_target(self, redirect_to: Optional[str]) -> Optional[str]:
+    def _sanitize_redirect_target(self, redirect_to: str | None) -> str | None:
         """Allow only relative redirects or URLs that match an approved origin."""
         if not redirect_to:
             return None
@@ -387,7 +378,7 @@ class AuthService:
         config = self.auth_manager.config
         origins: set[str] = set()
 
-        def add_origin(candidate: Optional[str]):
+        def add_origin(candidate: str | None):
             if not candidate or candidate == "*":
                 return
             parsed = urlparse(candidate)
@@ -402,7 +393,7 @@ class AuthService:
 
         return origins
 
-    async def _exchange_oauth_code(self, provider_cfg, code: str, redirect_uri: str) -> Dict[str, any]:
+    async def _exchange_oauth_code(self, provider_cfg, code: str, redirect_uri: str) -> dict[str, any]:
         payload = {
             "client_id": provider_cfg.client_id,
             "client_secret": provider_cfg.client_secret,
@@ -421,7 +412,7 @@ class AuthService:
                 token_data = await response.json()
                 return token_data
 
-    async def _fetch_userinfo(self, provider_cfg, token_data: Dict[str, any]) -> Dict[str, any]:
+    async def _fetch_userinfo(self, provider_cfg, token_data: dict[str, any]) -> dict[str, any]:
         access_token = token_data.get("access_token")
         if not access_token:
             raise AuthError("OAuth provider did not return an access token")

@@ -1,16 +1,15 @@
 """Service for managing environment filters."""
 
+import fnmatch
 import logging
 import uuid
-import fnmatch
-from typing import List, Optional
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from sqlalchemy.orm import Session
 from sqlalchemy import desc
+from sqlalchemy.orm import Session
 
 from database import EnvironmentDB
-from models import EnvironmentCreate, EnvironmentUpdate, EnvironmentResponse
+from models import EnvironmentCreate, EnvironmentResponse, EnvironmentUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -45,22 +44,19 @@ class EnvironmentService:
         logger.info(f"Created environment: {env_create.name}")
         return EnvironmentResponse.model_validate(env_db)
 
-    def list_environments(self) -> List[EnvironmentResponse]:
+    def list_environments(self) -> list[EnvironmentResponse]:
         """List all environments."""
-        envs = self.session.query(EnvironmentDB).order_by(
-            desc(EnvironmentDB.is_default),
-            EnvironmentDB.name
-        ).all()
+        envs = self.session.query(EnvironmentDB).order_by(desc(EnvironmentDB.is_default), EnvironmentDB.name).all()
         return [EnvironmentResponse.model_validate(env) for env in envs]
 
-    def get_environment(self, env_id: str) -> Optional[EnvironmentResponse]:
+    def get_environment(self, env_id: str) -> EnvironmentResponse | None:
         """Get environment by ID."""
         env = self.session.query(EnvironmentDB).filter(EnvironmentDB.id == env_id).first()
         if env:
             return EnvironmentResponse.model_validate(env)
         return None
 
-    def update_environment(self, env_id: str, env_update: EnvironmentUpdate) -> Optional[EnvironmentResponse]:
+    def update_environment(self, env_id: str, env_update: EnvironmentUpdate) -> EnvironmentResponse | None:
         """Update an environment."""
         env = self.session.query(EnvironmentDB).filter(EnvironmentDB.id == env_id).first()
         if not env:
@@ -80,7 +76,7 @@ class EnvironmentService:
         if env_update.is_default is not None:
             env.is_default = env_update.is_default
 
-        env.updated_at = datetime.now(timezone.utc)
+        env.updated_at = datetime.now(UTC)
 
         self.session.commit()
         self.session.refresh(env)
@@ -105,7 +101,7 @@ class EnvironmentService:
         self.session.query(EnvironmentDB).update({EnvironmentDB.is_default: False})
 
     @staticmethod
-    def matches_patterns(value: str, patterns: List[str]) -> bool:
+    def matches_patterns(value: str, patterns: list[str]) -> bool:
         """
         Check if a value matches any of the wildcard patterns.
 
@@ -125,10 +121,7 @@ class EnvironmentService:
         return False
 
     def should_include_event(
-        self,
-        queue_name: Optional[str] = None,
-        worker_hostname: Optional[str] = None,
-        env: Optional[EnvironmentResponse] = None
+        self, queue_name: str | None = None, worker_hostname: str | None = None, env: EnvironmentResponse | None = None
     ) -> bool:
         """
         Check if an event should be included based on environment filters.

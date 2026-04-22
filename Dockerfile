@@ -24,11 +24,11 @@ RUN apt-get update && apt-get install -y curl \
 
 WORKDIR /app
 
-COPY agent/pyproject.toml agent/poetry.lock* ./agent/
-RUN pip install poetry && \
+COPY agent/pyproject.toml agent/uv.lock ./agent/
+RUN pip install --no-cache-dir uv && \
     cd agent && \
-    poetry config virtualenvs.create false && \
-    poetry install --without dev
+    uv export --format requirements-txt --no-dev > requirements.txt && \
+    pip install --no-cache-dir -r requirements.txt
 
 COPY agent/ ./agent/
 

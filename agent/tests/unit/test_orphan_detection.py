@@ -1,36 +1,29 @@
 import unittest
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 
 from services.orphan_detection_service import OrphanDetectionService
 from tests.base import DatabaseTestCase
 
 
 class TestOrphanDetectionService(DatabaseTestCase):
-
     def setUp(self):
         super().setUp()
         self.service = OrphanDetectionService(self.session)
-        self.base_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        self.base_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
 
     def test_find_orphaned_tasks_basic(self):
         self.create_task_event_db(
-            task_id="orphan-1",
-            event_type="task-received",
-            timestamp=self.base_time,
-            hostname="worker1"
+            task_id="orphan-1", event_type="task-received", timestamp=self.base_time, hostname="worker1"
         )
         self.create_task_event_db(
             task_id="orphan-1",
             event_type="task-started",
             timestamp=self.base_time + timedelta(seconds=1),
-            hostname="worker1"
+            hostname="worker1",
         )
 
         orphaned_at = self.base_time + timedelta(seconds=10)
-        orphaned_tasks = self.service.find_and_mark_orphaned_tasks(
-            hostname="worker1",
-            orphaned_at=orphaned_at
-        )
+        orphaned_tasks = self.service.find_and_mark_orphaned_tasks(hostname="worker1", orphaned_at=orphaned_at)
 
         self.assertEqual(len(orphaned_tasks), 1)
         self.assertEqual(orphaned_tasks[0].task_id, "orphan-1")
@@ -45,28 +38,24 @@ class TestOrphanDetectionService(DatabaseTestCase):
 
     def test_orphan_detection_ignores_completed_tasks(self):
         self.create_task_event_db(
-            task_id="completed-1",
-            event_type="task-received",
-            timestamp=self.base_time,
-            hostname="worker1"
+            task_id="completed-1", event_type="task-received", timestamp=self.base_time, hostname="worker1"
         )
         self.create_task_event_db(
             task_id="completed-1",
             event_type="task-started",
             timestamp=self.base_time + timedelta(seconds=1),
-            hostname="worker1"
+            hostname="worker1",
         )
         self.create_task_event_db(
             task_id="completed-1",
             event_type="task-succeeded",
             timestamp=self.base_time + timedelta(seconds=5),
             hostname="worker1",
-            runtime=4.0
+            runtime=4.0,
         )
 
         orphaned_tasks = self.service.find_and_mark_orphaned_tasks(
-            hostname="worker1",
-            orphaned_at=self.base_time + timedelta(seconds=10)
+            hostname="worker1", orphaned_at=self.base_time + timedelta(seconds=10)
         )
 
         self.assertEqual(len(orphaned_tasks), 0)
@@ -77,43 +66,32 @@ class TestOrphanDetectionService(DatabaseTestCase):
 
     def test_orphan_detection_ignores_failed_tasks(self):
         self.create_task_event_db(
-            task_id="failed-1",
-            event_type="task-started",
-            timestamp=self.base_time,
-            hostname="worker1"
+            task_id="failed-1", event_type="task-started", timestamp=self.base_time, hostname="worker1"
         )
         self.create_task_event_db(
             task_id="failed-1",
             event_type="task-failed",
             timestamp=self.base_time + timedelta(seconds=2),
             hostname="worker1",
-            exception="ValueError: test error"
+            exception="ValueError: test error",
         )
 
         orphaned_tasks = self.service.find_and_mark_orphaned_tasks(
-            hostname="worker1",
-            orphaned_at=self.base_time + timedelta(seconds=10)
+            hostname="worker1", orphaned_at=self.base_time + timedelta(seconds=10)
         )
 
         self.assertEqual(len(orphaned_tasks), 0)
 
     def test_orphan_detection_by_hostname(self):
         self.create_task_event_db(
-            task_id="task-worker1",
-            event_type="task-started",
-            timestamp=self.base_time,
-            hostname="worker1"
+            task_id="task-worker1", event_type="task-started", timestamp=self.base_time, hostname="worker1"
         )
         self.create_task_event_db(
-            task_id="task-worker2",
-            event_type="task-started",
-            timestamp=self.base_time,
-            hostname="worker2"
+            task_id="task-worker2", event_type="task-started", timestamp=self.base_time, hostname="worker2"
         )
 
         orphaned_tasks = self.service.find_and_mark_orphaned_tasks(
-            hostname="worker1",
-            orphaned_at=self.base_time + timedelta(seconds=10)
+            hostname="worker1", orphaned_at=self.base_time + timedelta(seconds=10)
         )
 
         self.assertEqual(len(orphaned_tasks), 1)
@@ -133,12 +111,11 @@ class TestOrphanDetectionService(DatabaseTestCase):
                 task_id=f"orphan-{i}",
                 event_type="task-started",
                 timestamp=self.base_time + timedelta(seconds=i),
-                hostname="worker1"
+                hostname="worker1",
             )
 
         orphaned_tasks = self.service.find_and_mark_orphaned_tasks(
-            hostname="worker1",
-            orphaned_at=self.base_time + timedelta(seconds=10)
+            hostname="worker1", orphaned_at=self.base_time + timedelta(seconds=10)
         )
 
         self.assertEqual(len(orphaned_tasks), 5)
@@ -153,14 +130,11 @@ class TestOrphanDetectionService(DatabaseTestCase):
             timestamp=self.base_time,
             hostname="worker1",
             is_orphan=True,
-            orphaned_at=first_orphan_time
+            orphaned_at=first_orphan_time,
         )
 
         second_orphan_time = self.base_time + timedelta(seconds=20)
-        orphaned_tasks = self.service.find_and_mark_orphaned_tasks(
-            hostname="worker1",
-            orphaned_at=second_orphan_time
-        )
+        orphaned_tasks = self.service.find_and_mark_orphaned_tasks(hostname="worker1", orphaned_at=second_orphan_time)
 
         self.assertEqual(len(orphaned_tasks), 0)
 
@@ -171,15 +145,11 @@ class TestOrphanDetectionService(DatabaseTestCase):
 
     def test_orphan_detection_with_task_sent_event(self):
         self.create_task_event_db(
-            task_id="sent-only",
-            event_type="task-sent",
-            timestamp=self.base_time,
-            hostname="worker1"
+            task_id="sent-only", event_type="task-sent", timestamp=self.base_time, hostname="worker1"
         )
 
         orphaned_tasks = self.service.find_and_mark_orphaned_tasks(
-            hostname="worker1",
-            orphaned_at=self.base_time + timedelta(seconds=10)
+            hostname="worker1", orphaned_at=self.base_time + timedelta(seconds=10)
         )
 
         self.assertEqual(len(orphaned_tasks), 1)
@@ -187,15 +157,11 @@ class TestOrphanDetectionService(DatabaseTestCase):
 
     def test_orphan_detection_with_task_received_event(self):
         self.create_task_event_db(
-            task_id="received-only",
-            event_type="task-received",
-            timestamp=self.base_time,
-            hostname="worker1"
+            task_id="received-only", event_type="task-received", timestamp=self.base_time, hostname="worker1"
         )
 
         orphaned_tasks = self.service.find_and_mark_orphaned_tasks(
-            hostname="worker1",
-            orphaned_at=self.base_time + timedelta(seconds=10)
+            hostname="worker1", orphaned_at=self.base_time + timedelta(seconds=10)
         )
 
         self.assertEqual(len(orphaned_tasks), 1)
@@ -210,12 +176,11 @@ class TestOrphanDetectionService(DatabaseTestCase):
             hostname="worker1",
             routing_key="celery",
             args=[1, 2, 3],
-            kwargs={"key": "value"}
+            kwargs={"key": "value"},
         )
 
         orphaned_tasks = self.service.find_and_mark_orphaned_tasks(
-            hostname="worker1",
-            orphaned_at=self.base_time + timedelta(seconds=10)
+            hostname="worker1", orphaned_at=self.base_time + timedelta(seconds=10)
         )
 
         orphaned_at = self.base_time + timedelta(seconds=10)
@@ -235,45 +200,37 @@ class TestOrphanDetectionService(DatabaseTestCase):
 
     def test_orphan_detection_picks_latest_event(self):
         self.create_task_event_db(
-            task_id="task-1",
-            event_type="task-received",
-            timestamp=self.base_time,
-            hostname="worker1"
+            task_id="task-1", event_type="task-received", timestamp=self.base_time, hostname="worker1"
         )
         self.create_task_event_db(
             task_id="task-1",
             event_type="task-started",
             timestamp=self.base_time + timedelta(seconds=1),
-            hostname="worker1"
+            hostname="worker1",
         )
         self.create_task_event_db(
             task_id="task-1",
             event_type="task-succeeded",
             timestamp=self.base_time + timedelta(seconds=5),
-            hostname="worker1"
+            hostname="worker1",
         )
 
         self.create_task_event_db(
-            task_id="task-2",
-            event_type="task-received",
-            timestamp=self.base_time,
-            hostname="worker1"
+            task_id="task-2", event_type="task-received", timestamp=self.base_time, hostname="worker1"
         )
         self.create_task_event_db(
             task_id="task-2",
             event_type="task-started",
             timestamp=self.base_time + timedelta(seconds=1),
-            hostname="worker1"
+            hostname="worker1",
         )
 
         orphaned_tasks = self.service.find_and_mark_orphaned_tasks(
-            hostname="worker1",
-            orphaned_at=self.base_time + timedelta(seconds=10)
+            hostname="worker1", orphaned_at=self.base_time + timedelta(seconds=10)
         )
 
         self.assertEqual(len(orphaned_tasks), 1)
         self.assertEqual(orphaned_tasks[0].task_id, "task-2")
-
 
     def test_mark_tasks_as_orphaned_also_updates_task_latest(self):
         """task_latest snapshot must reflect is_orphan=True after orphan detection runs."""
@@ -328,5 +285,5 @@ class TestOrphanDetectionService(DatabaseTestCase):
             self.fail(f"find_and_mark_orphaned_tasks raised unexpectedly: {e}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

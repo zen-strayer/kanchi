@@ -1,21 +1,20 @@
 import json
 import logging
-from datetime import datetime, timezone
-from typing import List, Optional
+from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
 from database import TaskProgressDB, TaskProgressLatestDB, TaskStepsDB
-from models import TaskProgressEvent, TaskStepsEvent, StepDefinition
+from models import StepDefinition, TaskProgressEvent, TaskStepsEvent
 from utils.payload_sanitizer import sanitize_payload
 
 logger = logging.getLogger(__name__)
 
 
-def _ensure_utc(dt: Optional[datetime]) -> Optional[datetime]:
+def _ensure_utc(dt: datetime | None) -> datetime | None:
     if dt is None:
         return None
-    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
 
 
 class ProgressService:
@@ -76,12 +75,8 @@ class ProgressService:
             logger.error("Failed to save step definitions for %s: %s", steps_event.task_id, exc)
             raise
 
-    def get_latest_progress(self, task_id: str) -> Optional[TaskProgressEvent]:
-        latest = (
-            self.session.query(TaskProgressLatestDB)
-            .filter_by(task_id=task_id)
-            .one_or_none()
-        )
+    def get_latest_progress(self, task_id: str) -> TaskProgressEvent | None:
+        latest = self.session.query(TaskProgressLatestDB).filter_by(task_id=task_id).one_or_none()
         if not latest:
             return None
         return TaskProgressEvent(
@@ -91,10 +86,10 @@ class ProgressService:
             step_key=latest.step_key,
             message=latest.message,
             meta=latest.meta or {},
-            timestamp=_ensure_utc(latest.updated_at) or datetime.now(timezone.utc),
+            timestamp=_ensure_utc(latest.updated_at) or datetime.now(UTC),
         )
 
-    def get_progress_history(self, task_id: str, limit: int = 100) -> List[TaskProgressEvent]:
+    def get_progress_history(self, task_id: str, limit: int = 100) -> list[TaskProgressEvent]:
         events = (
             self.session.query(TaskProgressDB)
             .filter_by(task_id=task_id)
@@ -110,17 +105,13 @@ class ProgressService:
                 step_key=e.step_key,
                 message=e.message,
                 meta=e.meta or {},
-                timestamp=_ensure_utc(e.timestamp) or datetime.now(timezone.utc),
+                timestamp=_ensure_utc(e.timestamp) or datetime.now(UTC),
             )
             for e in events
         ]
 
-    def get_steps(self, task_id: str) -> List[StepDefinition]:
-        record = (
-            self.session.query(TaskStepsDB)
-            .filter_by(task_id=task_id)
-            .one_or_none()
-        )
+    def get_steps(self, task_id: str) -> list[StepDefinition]:
+        record = self.session.query(TaskStepsDB).filter_by(task_id=task_id).one_or_none()
         if not record:
             return []
 
@@ -129,7 +120,7 @@ class ProgressService:
             # Ensure proper dict/list structure
             if isinstance(steps_raw, str):
                 steps_raw = json.loads(steps_raw)
-            steps: List[StepDefinition] = []
+            steps: list[StepDefinition] = []
             for step in steps_raw:
                 if not isinstance(step, dict):
                     continue
@@ -152,11 +143,7 @@ class ProgressService:
             return []
 
     def _upsert_latest(self, event_db: TaskProgressDB) -> None:
-        existing = (
-            self.session.query(TaskProgressLatestDB)
-            .filter_by(task_id=event_db.task_id)
-            .one_or_none()
-        )
+        existing = self.session.query(TaskProgressLatestDB).filter_by(task_id=event_db.task_id).one_or_none()
 
         if not existing:
             self.session.add(
@@ -183,4 +170,4 @@ class ProgressService:
         existing.step_key = event_db.step_key
         existing.message = event_db.message
         existing.meta = event_db.meta
-        existing.updated_at = new_ts or datetime.now(timezone.utc)
+        existing.updated_at = new_ts or datetime.now(UTC)

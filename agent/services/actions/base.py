@@ -1,7 +1,8 @@
 """Base class for action handlers."""
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any
+from typing import Any
+
 from models import ActionResult
 
 
@@ -22,7 +23,7 @@ class ActionHandler(ABC):
         self.monitor_instance = monitor_instance
 
     @abstractmethod
-    async def execute(self, context: Dict[str, Any], params: Dict[str, Any]) -> ActionResult:
+    async def execute(self, context: dict[str, Any], params: dict[str, Any]) -> ActionResult:
         """
         Execute the action.
 
@@ -36,7 +37,7 @@ class ActionHandler(ABC):
         pass
 
     @abstractmethod
-    def validate_params(self, params: Dict[str, Any]) -> tuple[bool, str]:
+    def validate_params(self, params: dict[str, Any]) -> tuple[bool, str]:
         """
         Validate action parameters.
 
@@ -45,7 +46,7 @@ class ActionHandler(ABC):
         """
         pass
 
-    def render_template(self, template: str, context: Dict[str, Any]) -> str:
+    def render_template(self, template: str, context: dict[str, Any]) -> str:
         """
         Render a template string with context variables.
 

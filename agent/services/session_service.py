@@ -1,13 +1,12 @@
 """Service for managing anonymous user sessions."""
 
 import logging
-from typing import Optional
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
 from database import UserSessionDB
-from models import UserSessionResponse, UserSessionCreate, UserSessionUpdate
+from models import UserSessionResponse, UserSessionUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -22,20 +21,18 @@ class SessionService:
         self,
         session_id: str,
         *,
-        user_id: Optional[str] = None,
-        auth_provider: Optional[str] = None,
+        user_id: str | None = None,
+        auth_provider: str | None = None,
     ) -> UserSessionResponse:
         """
         Get an existing session or create a new one.
         This is the main entry point for session management.
         """
-        session_db = self.session.query(UserSessionDB).filter(
-            UserSessionDB.session_id == session_id
-        ).first()
+        session_db = self.session.query(UserSessionDB).filter(UserSessionDB.session_id == session_id).first()
 
         if session_db:
             self._ensure_session_owner(session_db, user_id, auth_provider)
-            session_db.last_active = datetime.now(timezone.utc)
+            session_db.last_active = datetime.now(UTC)
             self.session.commit()
             self.session.refresh(session_db)
             logger.debug(f"Retrieved existing session: {session_id}")
@@ -44,8 +41,8 @@ class SessionService:
                 session_id=session_id,
                 active_environment_id=None,
                 preferences={},
-                created_at=datetime.now(timezone.utc),
-                last_active=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
+                last_active=datetime.now(UTC),
                 user_id=user_id,
                 auth_provider=auth_provider,
             )
@@ -60,12 +57,10 @@ class SessionService:
         self,
         session_id: str,
         *,
-        user_id: Optional[str] = None,
-    ) -> Optional[UserSessionResponse]:
+        user_id: str | None = None,
+    ) -> UserSessionResponse | None:
         """Get session by ID."""
-        session_db = self.session.query(UserSessionDB).filter(
-            UserSessionDB.session_id == session_id
-        ).first()
+        session_db = self.session.query(UserSessionDB).filter(UserSessionDB.session_id == session_id).first()
 
         if session_db:
             self._ensure_session_owner(session_db, user_id, None)
@@ -77,12 +72,10 @@ class SessionService:
         session_id: str,
         session_update: UserSessionUpdate,
         *,
-        user_id: Optional[str] = None,
-    ) -> Optional[UserSessionResponse]:
+        user_id: str | None = None,
+    ) -> UserSessionResponse | None:
         """Update session preferences."""
-        session_db = self.session.query(UserSessionDB).filter(
-            UserSessionDB.session_id == session_id
-        ).first()
+        session_db = self.session.query(UserSessionDB).filter(UserSessionDB.session_id == session_id).first()
 
         if not session_db:
             return None
@@ -97,7 +90,7 @@ class SessionService:
             current_prefs.update(session_update.preferences)
             session_db.preferences = current_prefs
 
-        session_db.last_active = datetime.now(timezone.utc)
+        session_db.last_active = datetime.now(UTC)
 
         self.session.commit()
         self.session.refresh(session_db)
@@ -108,14 +101,12 @@ class SessionService:
     def set_active_environment(
         self,
         session_id: str,
-        environment_id: Optional[str],
+        environment_id: str | None,
         *,
-        user_id: Optional[str] = None,
-    ) -> Optional[UserSessionResponse]:
+        user_id: str | None = None,
+    ) -> UserSessionResponse | None:
         """Set the active environment for a session."""
-        session_db = self.session.query(UserSessionDB).filter(
-            UserSessionDB.session_id == session_id
-        ).first()
+        session_db = self.session.query(UserSessionDB).filter(UserSessionDB.session_id == session_id).first()
 
         if not session_db:
             return None
@@ -123,21 +114,17 @@ class SessionService:
         self._ensure_session_owner(session_db, user_id, None)
 
         session_db.active_environment_id = environment_id
-        session_db.last_active = datetime.now(timezone.utc)
+        session_db.last_active = datetime.now(UTC)
 
         self.session.commit()
         self.session.refresh(session_db)
 
-        logger.info(
-            f"Set active environment for session {session_id}: {environment_id}"
-        )
+        logger.info(f"Set active environment for session {session_id}: {environment_id}")
         return UserSessionResponse.model_validate(session_db)
 
-    def get_active_environment_id(self, session_id: str, *, user_id: Optional[str] = None) -> Optional[str]:
+    def get_active_environment_id(self, session_id: str, *, user_id: str | None = None) -> str | None:
         """Get the active environment ID for a session."""
-        session_db = self.session.query(UserSessionDB).filter(
-            UserSessionDB.session_id == session_id
-        ).first()
+        session_db = self.session.query(UserSessionDB).filter(UserSessionDB.session_id == session_id).first()
 
         if session_db:
             self._ensure_session_owner(session_db, user_id, None)
@@ -149,11 +136,9 @@ class SessionService:
         Delete sessions that haven't been active for specified days.
         Returns the number of sessions deleted.
         """
-        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
+        cutoff_date = datetime.now(UTC) - timedelta(days=days)
 
-        deleted_count = self.session.query(UserSessionDB).filter(
-            UserSessionDB.last_active < cutoff_date
-        ).delete()
+        deleted_count = self.session.query(UserSessionDB).filter(UserSessionDB.last_active < cutoff_date).delete()
 
         self.session.commit()
 
@@ -162,11 +147,9 @@ class SessionService:
 
         return deleted_count
 
-    def delete_session(self, session_id: str, *, user_id: Optional[str] = None) -> bool:
+    def delete_session(self, session_id: str, *, user_id: str | None = None) -> bool:
         """Delete a session."""
-        session_db = self.session.query(UserSessionDB).filter(
-            UserSessionDB.session_id == session_id
-        ).first()
+        session_db = self.session.query(UserSessionDB).filter(UserSessionDB.session_id == session_id).first()
 
         if not session_db:
             return False
@@ -182,8 +165,8 @@ class SessionService:
     def _ensure_session_owner(
         self,
         session_db: UserSessionDB,
-        user_id: Optional[str],
-        auth_provider: Optional[str],
+        user_id: str | None,
+        auth_provider: str | None,
     ) -> None:
         if user_id is None:
             return

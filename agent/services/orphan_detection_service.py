@@ -1,28 +1,23 @@
 import logging
 from datetime import datetime
-from typing import List
 
 from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
 
+from constants import NON_TERMINAL_EVENT_TYPES, EventType
 from database import TaskEventDB, TaskLatestDB
 from models import TaskEvent
-from constants import NON_TERMINAL_EVENT_TYPES, EventType
 
 logger = logging.getLogger(__name__)
 
 
 class OrphanDetectionService:
-
     def __init__(self, session: Session):
         self.session = session
 
     def find_and_mark_orphaned_tasks(
-        self,
-        hostname: str,
-        orphaned_at: datetime,
-        grace_period_seconds: int = 2
-    ) -> List[TaskEventDB]:
+        self, hostname: str, orphaned_at: datetime, grace_period_seconds: int = 2
+    ) -> list[TaskEventDB]:
         latest_events_subquery = self._build_latest_events_subquery(hostname)
         orphaned_tasks = self._find_non_terminal_tasks(latest_events_subquery)
 
@@ -34,59 +29,49 @@ class OrphanDetectionService:
         return orphaned_tasks
 
     def _build_latest_events_subquery(self, hostname: str):
-        return self.session.query(
-            TaskEventDB.task_id,
-            func.max(TaskEventDB.timestamp).label('max_timestamp')
-        ).filter(
-            TaskEventDB.hostname == hostname
-        ).group_by(TaskEventDB.task_id).subquery()
+        return (
+            self.session.query(TaskEventDB.task_id, func.max(TaskEventDB.timestamp).label("max_timestamp"))
+            .filter(TaskEventDB.hostname == hostname)
+            .group_by(TaskEventDB.task_id)
+            .subquery()
+        )
 
-    def _find_non_terminal_tasks(self, latest_events_subquery) -> List[TaskEventDB]:
+    def _find_non_terminal_tasks(self, latest_events_subquery) -> list[TaskEventDB]:
         non_terminal_values = [et.value for et in NON_TERMINAL_EVENT_TYPES]
-        return self.session.query(TaskEventDB).join(
-            latest_events_subquery,
-            and_(
-                TaskEventDB.task_id == latest_events_subquery.c.task_id,
-                TaskEventDB.timestamp == latest_events_subquery.c.max_timestamp,
-                TaskEventDB.event_type.in_(non_terminal_values),
-                TaskEventDB.is_orphan.is_(False)
+        return (
+            self.session.query(TaskEventDB)
+            .join(
+                latest_events_subquery,
+                and_(
+                    TaskEventDB.task_id == latest_events_subquery.c.task_id,
+                    TaskEventDB.timestamp == latest_events_subquery.c.max_timestamp,
+                    TaskEventDB.event_type.in_(non_terminal_values),
+                    TaskEventDB.is_orphan.is_(False),
+                ),
             )
-        ).all()
+            .all()
+        )
 
     def _mark_tasks_as_orphaned(
-        self,
-        orphaned_tasks: List[TaskEventDB],
-        orphaned_at: datetime,
-        grace_period_seconds: int
+        self, orphaned_tasks: list[TaskEventDB], orphaned_at: datetime, grace_period_seconds: int
     ):
         task_ids = [task.task_id for task in orphaned_tasks]
 
-        self.session.query(TaskEventDB).filter(
-            TaskEventDB.task_id.in_(task_ids)
-        ).update({
-            'is_orphan': True,
-            'orphaned_at': orphaned_at
-        }, synchronize_session=False)
+        self.session.query(TaskEventDB).filter(TaskEventDB.task_id.in_(task_ids)).update(
+            {"is_orphan": True, "orphaned_at": orphaned_at}, synchronize_session=False
+        )
 
-        self.session.query(TaskLatestDB).filter(
-            TaskLatestDB.task_id.in_(task_ids)
-        ).update({
-            'is_orphan': True,
-            'orphaned_at': orphaned_at
-        }, synchronize_session=False)
+        self.session.query(TaskLatestDB).filter(TaskLatestDB.task_id.in_(task_ids)).update(
+            {"is_orphan": True, "orphaned_at": orphaned_at}, synchronize_session=False
+        )
 
         self.session.commit()
 
         logger.info(
-            f"Marked {len(orphaned_tasks)} tasks as orphaned for offline worker "
-            f"(grace period: {grace_period_seconds}s)"
+            f"Marked {len(orphaned_tasks)} tasks as orphaned for offline worker (grace period: {grace_period_seconds}s)"
         )
 
-    def create_orphan_events(
-        self,
-        orphaned_tasks: List[TaskEventDB],
-        orphaned_at: datetime
-    ) -> List[TaskEvent]:
+    def create_orphan_events(self, orphaned_tasks: list[TaskEventDB], orphaned_at: datetime) -> list[TaskEvent]:
         """
         Create orphan event objects from orphaned tasks.
 
@@ -108,18 +93,13 @@ class OrphanDetectionService:
                 timestamp=orphaned_at,
                 routing_key=task.routing_key,
                 args=task.args,
-                kwargs=task.kwargs
+                kwargs=task.kwargs,
             )
             orphan_events.append(orphan_event)
 
         return orphan_events
 
-    def broadcast_orphan_events(
-        self,
-        orphaned_tasks: List[TaskEventDB],
-        orphaned_at: datetime,
-        connection_manager
-    ):
+    def broadcast_orphan_events(self, orphaned_tasks: list[TaskEventDB], orphaned_at: datetime, connection_manager):
         """
         Create and broadcast orphan events to WebSocket clients.
 

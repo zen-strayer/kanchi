@@ -1,14 +1,14 @@
 import unittest
-from datetime import datetime, timezone
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
+from datetime import UTC, datetime
 
-from database import Base, DatabaseManager, TaskEventDB, WorkerEventDB, RetryRelationshipDB
-from models import TaskEvent, WorkerEvent
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+
+from database import Base, RetryRelationshipDB, TaskEventDB, WorkerEventDB
+from models import TaskEvent
 
 
 class DatabaseTestCase(unittest.TestCase):
-
     def setUp(self):
         self.engine = create_engine("sqlite:///:memory:", echo=False)
         Base.metadata.create_all(self.engine)
@@ -33,10 +33,10 @@ class DatabaseTestCase(unittest.TestCase):
         exception: str = None,
         is_orphan: bool = False,
         orphaned_at: datetime = None,
-        **kwargs
+        **kwargs,
     ) -> TaskEvent:
         if timestamp is None:
-            timestamp = datetime.now(timezone.utc)
+            timestamp = datetime.now(UTC)
 
         return TaskEvent(
             task_id=task_id,
@@ -50,7 +50,7 @@ class DatabaseTestCase(unittest.TestCase):
             exception=exception,
             is_orphan=is_orphan,
             orphaned_at=orphaned_at,
-            **kwargs
+            **kwargs,
         )
 
     def create_task_event_db(
@@ -66,10 +66,10 @@ class DatabaseTestCase(unittest.TestCase):
         exception: str = None,
         is_orphan: bool = False,
         orphaned_at: datetime = None,
-        **kwargs
+        **kwargs,
     ) -> TaskEventDB:
         if timestamp is None:
-            timestamp = datetime.now(timezone.utc)
+            timestamp = datetime.now(UTC)
 
         event = TaskEventDB(
             task_id=task_id,
@@ -83,7 +83,7 @@ class DatabaseTestCase(unittest.TestCase):
             exception=exception,
             is_orphan=is_orphan,
             orphaned_at=orphaned_at,
-            **kwargs
+            **kwargs,
         )
         self.session.add(event)
         self.session.commit()
@@ -95,37 +95,24 @@ class DatabaseTestCase(unittest.TestCase):
         event_type: str = "worker-heartbeat",
         timestamp: datetime = None,
         status: str = "online",
-        **kwargs
+        **kwargs,
     ) -> WorkerEventDB:
         if timestamp is None:
-            timestamp = datetime.now(timezone.utc)
+            timestamp = datetime.now(UTC)
 
-        event = WorkerEventDB(
-            hostname=hostname,
-            event_type=event_type,
-            timestamp=timestamp,
-            status=status,
-            **kwargs
-        )
+        event = WorkerEventDB(hostname=hostname, event_type=event_type, timestamp=timestamp, status=status, **kwargs)
         self.session.add(event)
         self.session.commit()
         return event
 
     def create_retry_relationship(
-        self,
-        task_id: str,
-        original_id: str,
-        retry_chain: list = None,
-        total_retries: int = 0
+        self, task_id: str, original_id: str, retry_chain: list = None, total_retries: int = 0
     ) -> RetryRelationshipDB:
         if retry_chain is None:
             retry_chain = [original_id, task_id]
 
         relationship = RetryRelationshipDB(
-            task_id=task_id,
-            original_id=original_id,
-            retry_chain=retry_chain,
-            total_retries=total_retries
+            task_id=task_id, original_id=original_id, retry_chain=retry_chain, total_retries=total_retries
         )
         self.session.add(relationship)
         self.session.commit()
@@ -148,6 +135,5 @@ class DatabaseTestCase(unittest.TestCase):
 
 
 class ServiceTestCase(DatabaseTestCase):
-
     def setUp(self):
         super().setUp()

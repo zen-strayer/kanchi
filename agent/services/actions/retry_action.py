@@ -5,11 +5,12 @@ import json
 import logging
 import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Tuple, Optional
+from typing import Any
 
-from .base import ActionHandler
 from models import ActionResult, TaskEvent
 from services.task_service import TaskService
+
+from .base import ActionHandler
 
 logger = logging.getLogger(__name__)
 
@@ -17,27 +18,19 @@ logger = logging.getLogger(__name__)
 class RetryActionHandler(ActionHandler):
     """Handler for retrying tasks."""
 
-    async def execute(self, context: Dict[str, Any], params: Dict[str, Any]) -> ActionResult:
+    async def execute(self, context: dict[str, Any], params: dict[str, Any]) -> ActionResult:
         """Retry a task."""
         start_time = datetime.now()
 
         try:
             is_valid, error = self.validate_params(params)
             if not is_valid:
-                return ActionResult(
-                    action_type="task.retry",
-                    status="failed",
-                    error_message=error,
-                    duration_ms=0
-                )
+                return ActionResult(action_type="task.retry", status="failed", error_message=error, duration_ms=0)
 
             task_id = context.get("task_id")
             if not task_id:
                 return ActionResult(
-                    action_type="task.retry",
-                    status="failed",
-                    error_message="No task_id in context",
-                    duration_ms=0
+                    action_type="task.retry", status="failed", error_message="No task_id in context", duration_ms=0
                 )
 
             if not self.monitor_instance:
@@ -45,7 +38,7 @@ class RetryActionHandler(ActionHandler):
                     action_type="task.retry",
                     status="failed",
                     error_message="Celery monitor not available",
-                    duration_ms=0
+                    duration_ms=0,
                 )
 
             task_service = TaskService(self.session)
@@ -53,10 +46,7 @@ class RetryActionHandler(ActionHandler):
 
             if not task_events:
                 return ActionResult(
-                    action_type="task.retry",
-                    status="failed",
-                    error_message=f"Task not found: {task_id}",
-                    duration_ms=0
+                    action_type="task.retry", status="failed", error_message=f"Task not found: {task_id}", duration_ms=0
                 )
 
             original_task = task_events[-1]
@@ -77,12 +67,12 @@ class RetryActionHandler(ActionHandler):
                         "task_id": task_id,
                         "root_id": original_task.root_id,
                         "retry_count": current_retry_count,
-                        "max_retries": max_retries
+                        "max_retries": max_retries,
                     },
-                    duration_ms=int((datetime.now() - start_time).total_seconds() * 1000)
+                    duration_ms=int((datetime.now() - start_time).total_seconds() * 1000),
                 )
 
-            queue_name = original_task.queue if original_task.queue else 'default'
+            queue_name = original_task.queue if original_task.queue else "default"
             new_task_id = str(uuid.uuid4())
 
             task_service.create_retry_relationship(task_id, new_task_id)
@@ -102,7 +92,7 @@ class RetryActionHandler(ActionHandler):
                 queue=queue_name,
                 task_id=new_task_id,
                 root_id=preserved_root_id,  # This makes circuit breaker work!
-                countdown=countdown
+                countdown=countdown,
             )
 
             duration = int((datetime.now() - start_time).total_seconds() * 1000)
@@ -129,22 +119,17 @@ class RetryActionHandler(ActionHandler):
                     "retry_count": current_retry_count + 1,
                     "max_retries": max_retries,
                     "args": args,
-                    "kwargs": kwargs
+                    "kwargs": kwargs,
                 },
-                duration_ms=duration
+                duration_ms=duration,
             )
 
         except Exception as e:
             logger.error(f"Task retry failed: {e}", exc_info=True)
             duration = int((datetime.now() - start_time).total_seconds() * 1000)
-            return ActionResult(
-                action_type="task.retry",
-                status="failed",
-                error_message=str(e),
-                duration_ms=duration
-            )
+            return ActionResult(action_type="task.retry", status="failed", error_message=str(e), duration_ms=duration)
 
-    def validate_params(self, params: Dict[str, Any]) -> tuple[bool, str]:
+    def validate_params(self, params: dict[str, Any]) -> tuple[bool, str]:
         """Validate retry action parameters."""
         if "delay_seconds" in params:
             if not isinstance(params["delay_seconds"], (int, float)):
@@ -162,11 +147,7 @@ class RetryActionHandler(ActionHandler):
 
         return True, ""
 
-    def _resolve_call_signature(
-        self,
-        context: Dict[str, Any],
-        task_events: List[TaskEvent]
-    ) -> Tuple[tuple, dict]:
+    def _resolve_call_signature(self, context: dict[str, Any], task_events: list[TaskEvent]) -> tuple[tuple, dict]:
         """Prefer context args, then walk task history until we find a usable call signature."""
         args = self._parse_args(context.get("args"))
         kwargs = self._parse_kwargs(context.get("kwargs"))
@@ -227,7 +208,7 @@ class RetryActionHandler(ActionHandler):
 
         return raw_value if raw_value is not None else default
 
-    def _count_workflow_retries(self, task_id: str, root_id: Optional[str]) -> int:
+    def _count_workflow_retries(self, task_id: str, root_id: str | None) -> int:
         """
         Count how many times this task chain has been retried by workflows.
 
@@ -246,9 +227,7 @@ class RetryActionHandler(ActionHandler):
             while current_id and current_id not in visited:
                 visited.add(current_id)
 
-                rel = self.session.query(RetryRelationshipDB).filter(
-                    RetryRelationshipDB.task_id == current_id
-                ).first()
+                rel = self.session.query(RetryRelationshipDB).filter(RetryRelationshipDB.task_id == current_id).first()
 
                 if not rel:
                     break

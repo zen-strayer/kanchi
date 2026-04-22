@@ -7,24 +7,21 @@ to showcase the application's capabilities in screenshots, demos, and marketing 
 """
 
 import os
-import sys
-import uuid
 import random
-from datetime import datetime, timedelta, timezone, date
-from typing import List, Dict, Any
+import uuid
+from datetime import UTC, datetime, timedelta
 
 from database import (
-    DatabaseManager,
-    TaskEventDB,
-    WorkerEventDB,
-    TaskRegistryDB,
-    TaskDailyStatsDB,
-    EnvironmentDB,
-    WorkflowDB,
     ActionConfigDB,
+    DatabaseManager,
+    EnvironmentDB,
     RetryRelationshipDB,
+    TaskDailyStatsDB,
+    TaskEventDB,
+    TaskRegistryDB,
+    WorkerEventDB,
+    WorkflowDB,
 )
-from config import Config
 
 
 class DatabaseSeeder:
@@ -82,12 +79,14 @@ class DatabaseSeeder:
             "send_notification_email": (
                 [f"user{random.randint(100, 999)}@example.com"],
                 {
-                    "subject": random.choice([
-                        "Your order has been shipped",
-                        "Password reset request",
-                        "Welcome to our service",
-                        "Invoice #INV-{random.randint(1000, 9999)}",
-                    ]),
+                    "subject": random.choice(
+                        [
+                            "Your order has been shipped",
+                            "Password reset request",
+                            "Welcome to our service",
+                            "Invoice #INV-{random.randint(1000, 9999)}",
+                        ]
+                    ),
                     "template": random.choice(["welcome", "invoice", "shipping", "reset_password"]),
                 },
             ),
@@ -148,11 +147,13 @@ class DatabaseSeeder:
             "send_sms_notification": (
                 [f"+1555{random.randint(1000000, 9999999)}"],
                 {
-                    "message": random.choice([
-                        "Your delivery is on its way",
-                        "Verification code: 123456",
-                        "Order confirmed",
-                    ]),
+                    "message": random.choice(
+                        [
+                            "Your delivery is on its way",
+                            "Verification code: 123456",
+                            "Order confirmed",
+                        ]
+                    ),
                     "provider": "twilio",
                 },
             ),
@@ -371,7 +372,7 @@ class DatabaseSeeder:
             },
         ]
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         with self.db_manager.get_session() as session:
             for task_meta in task_metadata:
@@ -432,7 +433,7 @@ class DatabaseSeeder:
             },
         ]
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         with self.db_manager.get_session() as session:
             for config_data in action_configs:
@@ -539,7 +540,7 @@ class DatabaseSeeder:
             },
         ]
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         with self.db_manager.get_session() as session:
             for workflow_data in workflows:
@@ -560,7 +561,7 @@ class DatabaseSeeder:
         print(f"📊 Seeding task events for last {days_back} days...")
 
         events = []
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Generate events for each day
         for day_offset in range(days_back):
@@ -583,27 +584,16 @@ class DatabaseSeeder:
                 )
 
                 # Determine outcome (90% success, 5% fail, 3% orphan, 2% retry)
-                outcome = random.choices(
-                    ['success', 'failed', 'orphan', 'retry'],
-                    weights=[90, 5, 3, 2]
-                )[0]
+                outcome = random.choices(["success", "failed", "orphan", "retry"], weights=[90, 5, 3, 2])[0]
 
-                if outcome == 'success':
-                    events.extend(self._create_successful_task(
-                        task_id, task_name, worker, queue, event_time
-                    ))
-                elif outcome == 'failed':
-                    events.extend(self._create_failed_task(
-                        task_id, task_name, worker, queue, event_time
-                    ))
-                elif outcome == 'orphan':
-                    events.extend(self._create_orphaned_task(
-                        task_id, task_name, worker, queue, event_time
-                    ))
+                if outcome == "success":
+                    events.extend(self._create_successful_task(task_id, task_name, worker, queue, event_time))
+                elif outcome == "failed":
+                    events.extend(self._create_failed_task(task_id, task_name, worker, queue, event_time))
+                elif outcome == "orphan":
+                    events.extend(self._create_orphaned_task(task_id, task_name, worker, queue, event_time))
                 else:  # retry
-                    events.extend(self._create_retried_task(
-                        task_id, task_name, worker, queue, event_time
-                    ))
+                    events.extend(self._create_retried_task(task_id, task_name, worker, queue, event_time))
 
         # Bulk insert events
         with self.db_manager.get_session() as session:
@@ -615,7 +605,7 @@ class DatabaseSeeder:
 
     def _create_successful_task(
         self, task_id: str, task_name: str, worker: str, queue: str, timestamp: datetime
-    ) -> List[TaskEventDB]:
+    ) -> list[TaskEventDB]:
         """Create events for a successful task execution."""
         runtime = random.uniform(0.1, 5.0)
         args, kwargs = self._generate_task_arguments(task_name)
@@ -669,7 +659,7 @@ class DatabaseSeeder:
 
     def _create_failed_task(
         self, task_id: str, task_name: str, worker: str, queue: str, timestamp: datetime
-    ) -> List[TaskEventDB]:
+    ) -> list[TaskEventDB]:
         """Create events for a failed task execution."""
         runtime = random.uniform(0.1, 2.0)
         args, kwargs = self._generate_task_arguments(task_name)
@@ -732,7 +722,7 @@ class DatabaseSeeder:
 
     def _create_orphaned_task(
         self, task_id: str, task_name: str, worker: str, queue: str, timestamp: datetime
-    ) -> List[TaskEventDB]:
+    ) -> list[TaskEventDB]:
         """Create events for an orphaned task (started but never completed)."""
         args, kwargs = self._generate_task_arguments(task_name)
 
@@ -771,7 +761,7 @@ class DatabaseSeeder:
 
     def _create_retried_task(
         self, task_id: str, task_name: str, worker: str, queue: str, timestamp: datetime
-    ) -> List[TaskEventDB]:
+    ) -> list[TaskEventDB]:
         """Create events for a task that was retried and eventually succeeded."""
         original_id = task_id
         retry_id = str(uuid.uuid4())
@@ -891,7 +881,7 @@ class DatabaseSeeder:
         print(f"👷 Seeding worker events for last {days_back} days...")
 
         events = []
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         for worker in self.worker_hostnames:
             # Generate heartbeats every 5 minutes for each worker
@@ -923,7 +913,7 @@ class DatabaseSeeder:
         print(f"📈 Seeding daily statistics for last {days_back} days...")
 
         stats = []
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         for day_offset in range(days_back):
             current_date = (now - timedelta(days=day_offset)).date()
@@ -955,12 +945,8 @@ class DatabaseSeeder:
                         p50_runtime=avg_runtime * 0.9,
                         p95_runtime=avg_runtime * 1.8,
                         p99_runtime=avg_runtime * 2.5,
-                        first_execution=datetime.combine(current_date, datetime.min.time()).replace(
-                            tzinfo=timezone.utc
-                        ),
-                        last_execution=datetime.combine(current_date, datetime.max.time()).replace(
-                            tzinfo=timezone.utc
-                        ),
+                        first_execution=datetime.combine(current_date, datetime.min.time()).replace(tzinfo=UTC),
+                        last_execution=datetime.combine(current_date, datetime.max.time()).replace(tzinfo=UTC),
                     )
                 )
 
@@ -997,7 +983,7 @@ def main():
     args = parser.parse_args()
 
     # Get database URL
-    database_url = args.database_url or os.getenv('DATABASE_URL', 'sqlite:///kanchi.db')
+    database_url = args.database_url or os.getenv("DATABASE_URL", "sqlite:///kanchi.db")
 
     print(f"📦 Using database: {database_url}")
 

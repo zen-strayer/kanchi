@@ -1,17 +1,16 @@
 import unittest
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 
-from database import RetryRelationshipDB, TaskEventDB
+from database import RetryRelationshipDB
 from services.task_service import TaskService
 from tests.base import DatabaseTestCase
 
 
 class TestGetUnretriedOrphanedTasks(DatabaseTestCase):
-
     def setUp(self):
         super().setUp()
         self.service = TaskService(self.session)
-        self.base_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        self.base_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
 
     def _orphaned(self, task_id, event_type="task-started", offset_seconds=0):
         """Helper: create a task_events row marked as orphaned."""
@@ -35,12 +34,14 @@ class TestGetUnretriedOrphanedTasks(DatabaseTestCase):
     def test_excludes_task_with_retry_chain(self):
         """Orphaned task that has been retried (non-empty retry_chain) is excluded."""
         self._orphaned("task-retried")
-        self.session.add(RetryRelationshipDB(
-            task_id="task-retried",
-            original_id="task-retried",
-            retry_chain=["task-new-1"],
-            total_retries=1,
-        ))
+        self.session.add(
+            RetryRelationshipDB(
+                task_id="task-retried",
+                original_id="task-retried",
+                retry_chain=["task-new-1"],
+                total_retries=1,
+            )
+        )
         self.session.commit()
 
         result = self.service.get_unretried_orphaned_tasks()
@@ -67,12 +68,14 @@ class TestGetUnretriedOrphanedTasks(DatabaseTestCase):
 
         # Should be excluded: has retry chain
         self._orphaned("task-retried", offset_seconds=1)
-        self.session.add(RetryRelationshipDB(
-            task_id="task-retried",
-            original_id="task-retried",
-            retry_chain=["task-new"],
-            total_retries=1,
-        ))
+        self.session.add(
+            RetryRelationshipDB(
+                task_id="task-retried",
+                original_id="task-retried",
+                retry_chain=["task-new"],
+                total_retries=1,
+            )
+        )
 
         # Should be excluded: has final-state event
         self._orphaned("task-done", offset_seconds=2)

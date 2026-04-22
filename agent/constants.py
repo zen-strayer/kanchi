@@ -1,9 +1,9 @@
 """Constants and enums for Kanchi task monitoring system."""
 
-from enum import Enum
+from enum import StrEnum
 
 
-class TaskState(str, Enum):
+class TaskState(StrEnum):
     """Task states as exposed in the API."""
 
     PENDING = "PENDING"
@@ -16,7 +16,7 @@ class TaskState(str, Enum):
     ORPHANED = "ORPHANED"
 
 
-class EventType(str, Enum):
+class EventType(StrEnum):
     """Celery event types."""
 
     TASK_SENT = "task-sent"
@@ -31,7 +31,7 @@ class EventType(str, Enum):
     WORKER_OFFLINE = "worker-offline"
     WORKER_HEARTBEAT = "worker-heartbeat"
 
-# Custom Kanchi auxiliary events (not part of Celery state machine)
+    # Custom Kanchi auxiliary events (not part of Celery state machine)
     TASK_PROGRESS = "kanchi-task-progress"
     TASK_STEPS = "kanchi-task-steps"
 

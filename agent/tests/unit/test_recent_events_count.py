@@ -1,5 +1,5 @@
 import unittest
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 
 from database import TaskLatestDB
 from services.task_service import TaskService
@@ -7,11 +7,10 @@ from tests.base import DatabaseTestCase
 
 
 class TestRecentEventsCount(DatabaseTestCase):
-
     def setUp(self):
         super().setUp()
         self.service = TaskService(self.session)
-        self.base_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        self.base_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
 
     def _add_latest(self, task_id, event_type="task-succeeded", offset_seconds=0):
         """Helper: insert one row into task_latest."""
@@ -43,9 +42,7 @@ class TestRecentEventsCount(DatabaseTestCase):
         for i in range(2):
             self._add_latest(f"task-fail-{i}", event_type="task-failed", offset_seconds=10 + i)
 
-        result = self.service.get_recent_events(
-            limit=100, page=0, filter_state="SUCCESS"
-        )
+        result = self.service.get_recent_events(limit=100, page=0, filter_state="SUCCESS")
 
         self.assertEqual(result["pagination"]["total"], 3)
 

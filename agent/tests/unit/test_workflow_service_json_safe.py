@@ -1,10 +1,10 @@
 import json
-from enum import Enum
+from enum import StrEnum
 
 from services.workflow_service import WorkflowService
 
 
-class _DummyEnum(str, Enum):
+class _DummyEnum(StrEnum):
     FOO = "foo"
 
 

@@ -1,13 +1,11 @@
 import unittest
-from datetime import datetime, timezone
 
-from services.environment_service import EnvironmentService
 from models import EnvironmentCreate, EnvironmentUpdate
+from services.environment_service import EnvironmentService
 from tests.base import DatabaseTestCase
 
 
 class TestEnvironmentService(DatabaseTestCase):
-
     def setUp(self):
         super().setUp()
         self.service = EnvironmentService(self.session)
@@ -18,7 +16,7 @@ class TestEnvironmentService(DatabaseTestCase):
             description="Production environment",
             queue_patterns=["prod-*"],
             worker_patterns=["prod-worker-*"],
-            is_default=False
+            is_default=False,
         )
 
         result = self.service.create_environment(env_create)
@@ -31,18 +29,10 @@ class TestEnvironmentService(DatabaseTestCase):
         self.assertFalse(result.is_default)
 
     def test_create_environment_as_default_unsets_other_defaults(self):
-        env1 = EnvironmentCreate(
-            name="Environment 1",
-            queue_patterns=["env1-*"],
-            is_default=True
-        )
+        env1 = EnvironmentCreate(name="Environment 1", queue_patterns=["env1-*"], is_default=True)
         self.service.create_environment(env1)
 
-        env2 = EnvironmentCreate(
-            name="Environment 2",
-            queue_patterns=["env2-*"],
-            is_default=True
-        )
+        env2 = EnvironmentCreate(name="Environment 2", queue_patterns=["env2-*"], is_default=True)
         result2 = self.service.create_environment(env2)
 
         environments = self.service.list_environments()
@@ -53,10 +43,7 @@ class TestEnvironmentService(DatabaseTestCase):
         self.assertTrue(result2.is_default)
 
     def test_create_environment_with_minimal_fields(self):
-        env_create = EnvironmentCreate(
-            name="Minimal",
-            is_default=False
-        )
+        env_create = EnvironmentCreate(name="Minimal", is_default=False)
 
         result = self.service.create_environment(env_create)
 
@@ -70,18 +57,9 @@ class TestEnvironmentService(DatabaseTestCase):
         self.assertEqual(len(result), 0)
 
     def test_list_environments_orders_by_default_then_name(self):
-        self.service.create_environment(EnvironmentCreate(
-            name="Zebra",
-            is_default=False
-        ))
-        self.service.create_environment(EnvironmentCreate(
-            name="Alpha",
-            is_default=True
-        ))
-        self.service.create_environment(EnvironmentCreate(
-            name="Beta",
-            is_default=False
-        ))
+        self.service.create_environment(EnvironmentCreate(name="Zebra", is_default=False))
+        self.service.create_environment(EnvironmentCreate(name="Alpha", is_default=True))
+        self.service.create_environment(EnvironmentCreate(name="Beta", is_default=False))
 
         result = self.service.list_environments()
 
@@ -92,10 +70,7 @@ class TestEnvironmentService(DatabaseTestCase):
         self.assertEqual(result[2].name, "Zebra")
 
     def test_get_environment_exists(self):
-        created = self.service.create_environment(EnvironmentCreate(
-            name="Test Env",
-            is_default=False
-        ))
+        created = self.service.create_environment(EnvironmentCreate(name="Test Env", is_default=False))
 
         result = self.service.get_environment(created.id)
 
@@ -108,10 +83,7 @@ class TestEnvironmentService(DatabaseTestCase):
         self.assertIsNone(result)
 
     def test_update_environment_name(self):
-        created = self.service.create_environment(EnvironmentCreate(
-            name="Original Name",
-            is_default=False
-        ))
+        created = self.service.create_environment(EnvironmentCreate(name="Original Name", is_default=False))
 
         update = EnvironmentUpdate(name="Updated Name")
         result = self.service.update_environment(created.id, update)
@@ -120,11 +92,9 @@ class TestEnvironmentService(DatabaseTestCase):
         self.assertEqual(result.name, "Updated Name")
 
     def test_update_environment_description(self):
-        created = self.service.create_environment(EnvironmentCreate(
-            name="Test",
-            description="Original",
-            is_default=False
-        ))
+        created = self.service.create_environment(
+            EnvironmentCreate(name="Test", description="Original", is_default=False)
+        )
 
         update = EnvironmentUpdate(description="Updated description")
         result = self.service.update_environment(created.id, update)
@@ -132,11 +102,9 @@ class TestEnvironmentService(DatabaseTestCase):
         self.assertEqual(result.description, "Updated description")
 
     def test_update_environment_queue_patterns(self):
-        created = self.service.create_environment(EnvironmentCreate(
-            name="Test",
-            queue_patterns=["old-*"],
-            is_default=False
-        ))
+        created = self.service.create_environment(
+            EnvironmentCreate(name="Test", queue_patterns=["old-*"], is_default=False)
+        )
 
         update = EnvironmentUpdate(queue_patterns=["new-*", "other-*"])
         result = self.service.update_environment(created.id, update)
@@ -144,11 +112,9 @@ class TestEnvironmentService(DatabaseTestCase):
         self.assertEqual(result.queue_patterns, ["new-*", "other-*"])
 
     def test_update_environment_worker_patterns(self):
-        created = self.service.create_environment(EnvironmentCreate(
-            name="Test",
-            worker_patterns=["old-worker-*"],
-            is_default=False
-        ))
+        created = self.service.create_environment(
+            EnvironmentCreate(name="Test", worker_patterns=["old-worker-*"], is_default=False)
+        )
 
         update = EnvironmentUpdate(worker_patterns=["new-worker-*"])
         result = self.service.update_environment(created.id, update)
@@ -156,14 +122,8 @@ class TestEnvironmentService(DatabaseTestCase):
         self.assertEqual(result.worker_patterns, ["new-worker-*"])
 
     def test_update_environment_set_as_default_unsets_others(self):
-        env1 = self.service.create_environment(EnvironmentCreate(
-            name="Env 1",
-            is_default=True
-        ))
-        env2 = self.service.create_environment(EnvironmentCreate(
-            name="Env 2",
-            is_default=False
-        ))
+        env1 = self.service.create_environment(EnvironmentCreate(name="Env 1", is_default=True))
+        env2 = self.service.create_environment(EnvironmentCreate(name="Env 2", is_default=False))
 
         update = EnvironmentUpdate(is_default=True)
         self.service.update_environment(env2.id, update)
@@ -175,10 +135,7 @@ class TestEnvironmentService(DatabaseTestCase):
         self.assertTrue(result2.is_default)
 
     def test_update_environment_updates_timestamp(self):
-        created = self.service.create_environment(EnvironmentCreate(
-            name="Test",
-            is_default=False
-        ))
+        created = self.service.create_environment(EnvironmentCreate(name="Test", is_default=False))
 
         original_updated_at = created.updated_at
 
@@ -194,10 +151,7 @@ class TestEnvironmentService(DatabaseTestCase):
         self.assertIsNone(result)
 
     def test_update_environment_with_no_changes(self):
-        created = self.service.create_environment(EnvironmentCreate(
-            name="Test",
-            is_default=False
-        ))
+        created = self.service.create_environment(EnvironmentCreate(name="Test", is_default=False))
 
         update = EnvironmentUpdate()
         result = self.service.update_environment(created.id, update)
@@ -206,10 +160,7 @@ class TestEnvironmentService(DatabaseTestCase):
         self.assertEqual(result.name, "Test")
 
     def test_delete_environment_exists(self):
-        created = self.service.create_environment(EnvironmentCreate(
-            name="To Delete",
-            is_default=False
-        ))
+        created = self.service.create_environment(EnvironmentCreate(name="To Delete", is_default=False))
 
         result = self.service.delete_environment(created.id)
 
@@ -221,26 +172,14 @@ class TestEnvironmentService(DatabaseTestCase):
         self.assertFalse(result)
 
     def test_matches_patterns_with_wildcard_star(self):
-        self.assertTrue(EnvironmentService.matches_patterns(
-            "prod-queue-1", ["prod-*"]
-        ))
-        self.assertTrue(EnvironmentService.matches_patterns(
-            "prod-queue-123", ["prod-*"]
-        ))
-        self.assertFalse(EnvironmentService.matches_patterns(
-            "dev-queue-1", ["prod-*"]
-        ))
+        self.assertTrue(EnvironmentService.matches_patterns("prod-queue-1", ["prod-*"]))
+        self.assertTrue(EnvironmentService.matches_patterns("prod-queue-123", ["prod-*"]))
+        self.assertFalse(EnvironmentService.matches_patterns("dev-queue-1", ["prod-*"]))
 
     def test_matches_patterns_with_wildcard_question_mark(self):
-        self.assertTrue(EnvironmentService.matches_patterns(
-            "q1", ["q?"]
-        ))
-        self.assertTrue(EnvironmentService.matches_patterns(
-            "q2", ["q?"]
-        ))
-        self.assertFalse(EnvironmentService.matches_patterns(
-            "q12", ["q?"]
-        ))
+        self.assertTrue(EnvironmentService.matches_patterns("q1", ["q?"]))
+        self.assertTrue(EnvironmentService.matches_patterns("q2", ["q?"]))
+        self.assertFalse(EnvironmentService.matches_patterns("q12", ["q?"]))
 
     def test_matches_patterns_with_multiple_patterns(self):
         patterns = ["prod-*", "staging-*"]
@@ -249,133 +188,79 @@ class TestEnvironmentService(DatabaseTestCase):
         self.assertFalse(EnvironmentService.matches_patterns("dev-queue", patterns))
 
     def test_matches_patterns_exact_match(self):
-        self.assertTrue(EnvironmentService.matches_patterns(
-            "exact-match", ["exact-match"]
-        ))
-        self.assertFalse(EnvironmentService.matches_patterns(
-            "exact-match-not", ["exact-match"]
-        ))
+        self.assertTrue(EnvironmentService.matches_patterns("exact-match", ["exact-match"]))
+        self.assertFalse(EnvironmentService.matches_patterns("exact-match-not", ["exact-match"]))
 
     def test_matches_patterns_empty_patterns_returns_true(self):
         self.assertTrue(EnvironmentService.matches_patterns("anything", []))
 
     def test_matches_patterns_with_complex_wildcards(self):
-        self.assertTrue(EnvironmentService.matches_patterns(
-            "prod-worker-1-eu", ["prod-worker-?-*"]
-        ))
-        self.assertFalse(EnvironmentService.matches_patterns(
-            "prod-worker-12-eu", ["prod-worker-?-*"]
-        ))
+        self.assertTrue(EnvironmentService.matches_patterns("prod-worker-1-eu", ["prod-worker-?-*"]))
+        self.assertFalse(EnvironmentService.matches_patterns("prod-worker-12-eu", ["prod-worker-?-*"]))
 
     def test_should_include_event_no_environment_returns_true(self):
-        result = self.service.should_include_event(
-            queue_name="any-queue",
-            worker_hostname="any-worker",
-            env=None
-        )
+        result = self.service.should_include_event(queue_name="any-queue", worker_hostname="any-worker", env=None)
         self.assertTrue(result)
 
     def test_should_include_event_matches_queue_pattern(self):
-        env = self.service.create_environment(EnvironmentCreate(
-            name="Test",
-            queue_patterns=["prod-*"],
-            is_default=False
-        ))
+        env = self.service.create_environment(
+            EnvironmentCreate(name="Test", queue_patterns=["prod-*"], is_default=False)
+        )
 
-        self.assertTrue(self.service.should_include_event(
-            queue_name="prod-queue",
-            env=env
-        ))
-        self.assertFalse(self.service.should_include_event(
-            queue_name="dev-queue",
-            env=env
-        ))
+        self.assertTrue(self.service.should_include_event(queue_name="prod-queue", env=env))
+        self.assertFalse(self.service.should_include_event(queue_name="dev-queue", env=env))
 
     def test_should_include_event_matches_worker_pattern(self):
-        env = self.service.create_environment(EnvironmentCreate(
-            name="Test",
-            worker_patterns=["celery-*"],
-            is_default=False
-        ))
+        env = self.service.create_environment(
+            EnvironmentCreate(name="Test", worker_patterns=["celery-*"], is_default=False)
+        )
 
-        self.assertTrue(self.service.should_include_event(
-            worker_hostname="celery-worker-1",
-            env=env
-        ))
-        self.assertFalse(self.service.should_include_event(
-            worker_hostname="other-worker-1",
-            env=env
-        ))
+        self.assertTrue(self.service.should_include_event(worker_hostname="celery-worker-1", env=env))
+        self.assertFalse(self.service.should_include_event(worker_hostname="other-worker-1", env=env))
 
     def test_should_include_event_matches_both_queue_and_worker(self):
-        env = self.service.create_environment(EnvironmentCreate(
-            name="Test",
-            queue_patterns=["prod-*"],
-            worker_patterns=["celery-*"],
-            is_default=False
-        ))
+        env = self.service.create_environment(
+            EnvironmentCreate(name="Test", queue_patterns=["prod-*"], worker_patterns=["celery-*"], is_default=False)
+        )
 
-        self.assertTrue(self.service.should_include_event(
-            queue_name="prod-queue",
-            worker_hostname="celery-worker-1",
-            env=env
-        ))
+        self.assertTrue(
+            self.service.should_include_event(queue_name="prod-queue", worker_hostname="celery-worker-1", env=env)
+        )
 
     def test_should_include_event_fails_if_queue_does_not_match(self):
-        env = self.service.create_environment(EnvironmentCreate(
-            name="Test",
-            queue_patterns=["prod-*"],
-            worker_patterns=["celery-*"],
-            is_default=False
-        ))
+        env = self.service.create_environment(
+            EnvironmentCreate(name="Test", queue_patterns=["prod-*"], worker_patterns=["celery-*"], is_default=False)
+        )
 
-        self.assertFalse(self.service.should_include_event(
-            queue_name="dev-queue",
-            worker_hostname="celery-worker-1",
-            env=env
-        ))
+        self.assertFalse(
+            self.service.should_include_event(queue_name="dev-queue", worker_hostname="celery-worker-1", env=env)
+        )
 
     def test_should_include_event_fails_if_worker_does_not_match(self):
-        env = self.service.create_environment(EnvironmentCreate(
-            name="Test",
-            queue_patterns=["prod-*"],
-            worker_patterns=["celery-*"],
-            is_default=False
-        ))
+        env = self.service.create_environment(
+            EnvironmentCreate(name="Test", queue_patterns=["prod-*"], worker_patterns=["celery-*"], is_default=False)
+        )
 
-        self.assertFalse(self.service.should_include_event(
-            queue_name="prod-queue",
-            worker_hostname="other-worker-1",
-            env=env
-        ))
+        self.assertFalse(
+            self.service.should_include_event(queue_name="prod-queue", worker_hostname="other-worker-1", env=env)
+        )
 
     def test_should_include_event_with_empty_patterns_matches_all(self):
-        env = self.service.create_environment(EnvironmentCreate(
-            name="Test",
-            queue_patterns=[],
-            worker_patterns=[],
-            is_default=False
-        ))
+        env = self.service.create_environment(
+            EnvironmentCreate(name="Test", queue_patterns=[], worker_patterns=[], is_default=False)
+        )
 
-        self.assertTrue(self.service.should_include_event(
-            queue_name="any-queue",
-            worker_hostname="any-worker",
-            env=env
-        ))
+        self.assertTrue(
+            self.service.should_include_event(queue_name="any-queue", worker_hostname="any-worker", env=env)
+        )
 
     def test_should_include_event_with_none_values(self):
-        env = self.service.create_environment(EnvironmentCreate(
-            name="Test",
-            queue_patterns=["prod-*"],
-            is_default=False
-        ))
+        env = self.service.create_environment(
+            EnvironmentCreate(name="Test", queue_patterns=["prod-*"], is_default=False)
+        )
 
-        self.assertTrue(self.service.should_include_event(
-            queue_name=None,
-            worker_hostname="some-worker",
-            env=env
-        ))
+        self.assertTrue(self.service.should_include_event(queue_name=None, worker_hostname="some-worker", env=env))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

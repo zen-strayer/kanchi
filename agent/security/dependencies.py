@@ -1,7 +1,6 @@
 """FastAPI dependencies for authentication."""
 
 from dataclasses import dataclass
-from typing import Optional
 
 from fastapi import HTTPException, Request
 
@@ -10,8 +9,8 @@ from database import DatabaseManager
 from security.auth import (
     AnonymousUser,
     AuthenticatedUser,
-    AuthManager,
     AuthError,
+    AuthManager,
 )
 from security.tokens import TokenError
 from services.auth_service import AuthService
@@ -20,14 +19,15 @@ from services.auth_service import AuthService
 @dataclass
 class AuthDependencies:
     """Container for lazily-evaluated dependency callables."""
+
     require_user: callable
     optional_user: callable
 
 
 def build_auth_dependencies(
     config: Config,
-    db_manager: Optional[DatabaseManager],
-    auth_manager: Optional[AuthManager],
+    db_manager: DatabaseManager | None,
+    auth_manager: AuthManager | None,
 ) -> AuthDependencies:
     """Factory returning dependency callables bound to runtime state."""
 
@@ -67,8 +67,8 @@ def get_auth_dependency(app_state, *, require: bool):
 async def _resolve_user(
     request: Request,
     config: Config,
-    db_manager: Optional[DatabaseManager],
-    auth_manager: Optional[AuthManager],
+    db_manager: DatabaseManager | None,
+    auth_manager: AuthManager | None,
     require: bool,
 ):
     """Resolve the current user context."""

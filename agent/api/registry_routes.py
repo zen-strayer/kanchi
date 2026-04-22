@@ -1,24 +1,24 @@
 """API routes for task registry endpoints."""
 
-from typing import List, Optional
 from datetime import date, datetime, timedelta
-from fastapi import APIRouter, Depends, HTTPException, Query, Header
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from services import TaskRegistryService, DailyStatsService, SessionService, EnvironmentService
-from models import (
-    TaskRegistryResponse,
-    TaskRegistryUpdate,
-    TaskRegistryStats,
-    TaskDailyStatsResponse,
-    TaskTimelineResponse
-)
 from config import Config
+from models import (
+    TaskDailyStatsResponse,
+    TaskRegistryResponse,
+    TaskRegistryStats,
+    TaskRegistryUpdate,
+    TaskTimelineResponse,
+)
 from security.auth import AuthenticatedUser
 from security.dependencies import get_auth_dependency
+from services import DailyStatsService, EnvironmentService, SessionService, TaskRegistryService
 
 
-def create_router(app_state) -> APIRouter:
+def create_router(app_state) -> APIRouter:  # noqa: C901
     """Create task registry router with dependency injection."""
     router = APIRouter(prefix="/api/registry", tags=["registry"])
 
@@ -38,8 +38,8 @@ def create_router(app_state) -> APIRouter:
 
     async def get_active_env(
         session: Session = Depends(get_db),
-        x_session_id: Optional[str] = Header(None),
-        current_user: Optional[AuthenticatedUser] = Depends(optional_user_dep)
+        x_session_id: str | None = Header(None),
+        current_user: AuthenticatedUser | None = Depends(optional_user_dep),
     ):
         """Dependency to get active environment from session."""
         if not x_session_id:
@@ -58,12 +58,12 @@ def create_router(app_state) -> APIRouter:
         env_service = EnvironmentService(session)
         return env_service.get_environment(env_id)
 
-    @router.get("/tasks", response_model=List[TaskRegistryResponse])
+    @router.get("/tasks", response_model=list[TaskRegistryResponse])
     async def list_tasks(
-        tag: Optional[str] = None,
-        name: Optional[str] = None,
+        tag: str | None = None,
+        name: str | None = None,
         session: Session = Depends(get_db),
-        active_env = Depends(get_active_env)
+        active_env=Depends(get_active_env),
     ):
         """
         List all registered tasks with optional filters.
@@ -76,11 +76,7 @@ def create_router(app_state) -> APIRouter:
         return registry_service.list_tasks(tag=tag, name_filter=name)
 
     @router.get("/tasks/{task_name}", response_model=TaskRegistryResponse)
-    async def get_task(
-        task_name: str,
-        session: Session = Depends(get_db),
-        active_env = Depends(get_active_env)
-    ):
+    async def get_task(task_name: str, session: Session = Depends(get_db), active_env=Depends(get_active_env)):
         """
         Get details about a specific task.
 
@@ -100,7 +96,7 @@ def create_router(app_state) -> APIRouter:
         task_name: str,
         update_data: TaskRegistryUpdate,
         session: Session = Depends(get_db),
-        active_env = Depends(get_active_env)
+        active_env=Depends(get_active_env),
     ):
         """
         Update task metadata (human_readable_name, description, tags).
@@ -119,10 +115,7 @@ def create_router(app_state) -> APIRouter:
 
     @router.get("/tasks/{task_name}/stats", response_model=TaskRegistryStats)
     async def get_task_stats(
-        task_name: str,
-        hours: int = 24,
-        session: Session = Depends(get_db),
-        active_env = Depends(get_active_env)
+        task_name: str, hours: int = 24, session: Session = Depends(get_db), active_env=Depends(get_active_env)
     ):
         """
         Get statistics for a specific task.
@@ -146,7 +139,7 @@ def create_router(app_state) -> APIRouter:
         hours: int = Query(24, description="Number of hours to look back"),
         bucket_size_minutes: int = Query(60, description="Bucket size in minutes (e.g., 60 for 1-hour buckets)"),
         session: Session = Depends(get_db),
-        active_env = Depends(get_active_env)
+        active_env=Depends(get_active_env),
     ):
         """
         Get execution timeline for visualizing task frequency over time.
@@ -163,29 +156,22 @@ def create_router(app_state) -> APIRouter:
         if not task:
             raise HTTPException(status_code=404, detail=f"Task '{task_name}' not found")
 
-        return registry_service.get_task_timeline(
-            task_name,
-            hours=hours,
-            bucket_size_minutes=bucket_size_minutes
-        )
+        return registry_service.get_task_timeline(task_name, hours=hours, bucket_size_minutes=bucket_size_minutes)
 
-    @router.get("/tags", response_model=List[str])
-    async def get_all_tags(
-        session: Session = Depends(get_db),
-        active_env = Depends(get_active_env)
-    ):
+    @router.get("/tags", response_model=list[str])
+    async def get_all_tags(session: Session = Depends(get_db), active_env=Depends(get_active_env)):
         """Get all unique tags across all tasks."""
         registry_service = TaskRegistryService(session, active_env=active_env)
         return registry_service.get_all_tags()
 
-    @router.get("/tasks/{task_name}/daily-stats", response_model=List[TaskDailyStatsResponse])
+    @router.get("/tasks/{task_name}/daily-stats", response_model=list[TaskDailyStatsResponse])
     async def get_task_daily_stats(
         task_name: str,
-        start_date: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
-        end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
-        days: Optional[int] = Query(30, description="Number of days to look back (if no dates specified)"),
+        start_date: date | None = Query(None, description="Start date (YYYY-MM-DD)"),
+        end_date: date | None = Query(None, description="End date (YYYY-MM-DD)"),
+        days: int | None = Query(30, description="Number of days to look back (if no dates specified)"),
         session: Session = Depends(get_db),
-        active_env = Depends(get_active_env)
+        active_env=Depends(get_active_env),
     ):
         """
         Get daily statistics for a task.
@@ -209,10 +195,7 @@ def create_router(app_state) -> APIRouter:
 
         daily_stats_service = DailyStatsService(session)
         return daily_stats_service.get_daily_stats(
-            task_name,
-            start_date=start_date,
-            end_date=end_date,
-            limit=days if days else 30
+            task_name, start_date=start_date, end_date=end_date, limit=days if days else 30
         )
 
     @router.get("/tasks/{task_name}/trend", response_model=dict)
@@ -220,7 +203,7 @@ def create_router(app_state) -> APIRouter:
         task_name: str,
         days: int = Query(7, description="Number of days to analyze"),
         session: Session = Depends(get_db),
-        active_env = Depends(get_active_env)
+        active_env=Depends(get_active_env),
     ):
         """
         Get trend summary for a task over the last N days.
@@ -236,11 +219,8 @@ def create_router(app_state) -> APIRouter:
         daily_stats_service = DailyStatsService(session)
         return daily_stats_service.get_task_trend_summary(task_name, days=days)
 
-    @router.get("/daily-stats/{target_date}", response_model=List[TaskDailyStatsResponse])
-    async def get_all_tasks_stats_for_date(
-        target_date: date,
-        session: Session = Depends(get_db)
-    ):
+    @router.get("/daily-stats/{target_date}", response_model=list[TaskDailyStatsResponse])
+    async def get_all_tasks_stats_for_date(target_date: date, session: Session = Depends(get_db)):
         """
         Get statistics for all tasks on a specific date.
 

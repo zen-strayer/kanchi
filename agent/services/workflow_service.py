@@ -2,27 +2,27 @@
 
 import logging
 import uuid
-from datetime import date, datetime, timezone, timedelta
-from typing import Any, Dict, List, Optional, Set
+from datetime import UTC, date, datetime, timedelta
 from enum import Enum
+from typing import Any
 
-from sqlalchemy import and_, or_
+from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
-from database import WorkflowDB, WorkflowExecutionDB, ensure_utc_isoformat, utc_now
+from database import WorkflowDB, WorkflowExecutionDB, ensure_utc_isoformat
 from models import (
-    WorkflowDefinition,
-    WorkflowCreateRequest,
-    WorkflowUpdateRequest,
-    WorkflowExecutionRecord,
-    TriggerConfig,
-    ConditionGroup,
     ActionConfig,
     CircuitBreakerConfig,
-    CircuitBreakerState
+    CircuitBreakerState,
+    ConditionGroup,
+    TriggerConfig,
+    WorkflowCreateRequest,
+    WorkflowDefinition,
+    WorkflowExecutionRecord,
+    WorkflowUpdateRequest,
 )
-from services.action_executor import ActionExecutor
 from services.action_config_service import ActionConfigService
+from services.action_executor import ActionExecutor
 from services.workflow_catalog import TRIGGER_METADATA
 
 logger = logging.getLogger(__name__)
@@ -35,7 +35,7 @@ class WorkflowService:
         self.session = session
 
     @staticmethod
-    def _ensure_aware_utc(dt: Optional[datetime]) -> Optional[datetime]:
+    def _ensure_aware_utc(dt: datetime | None) -> datetime | None:
         """
         Ensure datetime objects are timezone-aware and normalized to UTC.
         SQLite sometimes returns naive datetimes even for timezone-aware columns.
@@ -43,16 +43,13 @@ class WorkflowService:
         if dt is None:
             return None
         if dt.tzinfo is None:
-            return dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone(timezone.utc)
+            return dt.replace(tzinfo=UTC)
+        return dt.astimezone(UTC)
 
     @staticmethod
-    def _circuit_candidate_fields(
-        workflow: WorkflowDefinition,
-        config: CircuitBreakerConfig
-    ) -> List[str]:
+    def _circuit_candidate_fields(workflow: WorkflowDefinition, config: CircuitBreakerConfig) -> list[str]:
         """Determine which context fields should be inspected for circuit breaker grouping."""
-        candidates: List[str] = []
+        candidates: list[str] = []
 
         if config.context_field:
             candidates.append(config.context_field)
@@ -67,7 +64,7 @@ class WorkflowService:
         candidates.extend(["root_id", "task_id"])
 
         # Deduplicate while preserving order
-        seen: Set[str] = set()
+        seen: set[str] = set()
         ordered = []
         for field in candidates:
             if field and field not in seen:
@@ -76,7 +73,7 @@ class WorkflowService:
 
         return ordered
 
-    def _json_safe(self, value: Any) -> Any:
+    def _json_safe(self, value: Any) -> Any:  # noqa: C901
         """Convert complex objects (datetimes, UUIDs, Pydantic models) into JSON-safe structures."""
         if value is None:
             return None
@@ -118,10 +115,8 @@ class WorkflowService:
         return value
 
     def resolve_circuit_breaker_key(
-        self,
-        workflow: WorkflowDefinition,
-        context: Dict[str, Any]
-    ) -> tuple[Optional[str], Optional[str]]:
+        self, workflow: WorkflowDefinition, context: dict[str, Any]
+    ) -> tuple[str | None, str | None]:
         """Resolve the circuit breaker grouping key (value, field)."""
         config = workflow.circuit_breaker
         if not config or not config.enabled:
@@ -137,11 +132,7 @@ class WorkflowService:
 
         return None, None
 
-    def is_circuit_breaker_open(
-        self,
-        workflow: WorkflowDefinition,
-        context: Dict[str, Any]
-    ) -> CircuitBreakerState:
+    def is_circuit_breaker_open(self, workflow: WorkflowDefinition, context: dict[str, Any]) -> CircuitBreakerState:
         """Check whether the circuit breaker should prevent execution."""
         config = workflow.circuit_breaker
         if not config or not config.enabled:
@@ -152,15 +143,19 @@ class WorkflowService:
         if not key:
             return CircuitBreakerState(is_open=False)
 
-        window_start = datetime.now(timezone.utc) - timedelta(seconds=config.window_seconds)
+        window_start = datetime.now(UTC) - timedelta(seconds=config.window_seconds)
 
-        recent_count = self.session.query(WorkflowExecutionDB).filter(
-            and_(
-                WorkflowExecutionDB.workflow_id == workflow.id,
-                WorkflowExecutionDB.circuit_breaker_key == key,
-                WorkflowExecutionDB.triggered_at >= window_start
+        recent_count = (
+            self.session.query(WorkflowExecutionDB)
+            .filter(
+                and_(
+                    WorkflowExecutionDB.workflow_id == workflow.id,
+                    WorkflowExecutionDB.circuit_breaker_key == key,
+                    WorkflowExecutionDB.triggered_at >= window_start,
+                )
             )
-        ).count()
+            .count()
+        )
 
         if recent_count >= config.max_executions:
             reason = (
@@ -177,10 +172,10 @@ class WorkflowService:
         self,
         workflow: WorkflowDefinition,
         trigger_type: str,
-        trigger_event: Dict[str, Any],
-        workflow_snapshot: Dict[str, Any],
-        circuit_breaker_key: Optional[str],
-        reason: str
+        trigger_event: dict[str, Any],
+        workflow_snapshot: dict[str, Any],
+        circuit_breaker_key: str | None,
+        reason: str,
     ) -> None:
         """Persist a workflow execution record for a circuit breaker skip."""
         execution_db = WorkflowExecutionDB(
@@ -191,17 +186,13 @@ class WorkflowService:
             error_message=reason,
             actions_executed=[],
             circuit_breaker_key=circuit_breaker_key,
-            workflow_snapshot=self._json_safe(workflow_snapshot)
+            workflow_snapshot=self._json_safe(workflow_snapshot),
         )
 
         self.session.add(execution_db)
         self.session.commit()
 
-    def _validate_workflow_definition(
-        self,
-        trigger: TriggerConfig,
-        actions: List[ActionConfig]
-    ):
+    def _validate_workflow_definition(self, trigger: TriggerConfig, actions: list[ActionConfig]):
         valid_triggers = {meta["type"] for meta in TRIGGER_METADATA}
         if trigger.type not in valid_triggers:
             raise ValueError(f"Unsupported trigger type: {trigger.type}")
@@ -222,7 +213,7 @@ class WorkflowService:
                 if not config_service.get_config(config_id):
                     raise ValueError(f"Action config not found: {config_id}")
 
-    def _coerce_actions(self, actions: List[Any]) -> List[ActionConfig]:
+    def _coerce_actions(self, actions: list[Any]) -> list[ActionConfig]:
         coerced = []
         for action in actions:
             if isinstance(action, ActionConfig):
@@ -252,9 +243,7 @@ class WorkflowService:
             priority=workflow_data.priority,
             max_executions_per_hour=workflow_data.max_executions_per_hour,
             cooldown_seconds=workflow_data.cooldown_seconds,
-            circuit_breaker_config=workflow_data.circuit_breaker.dict()
-            if workflow_data.circuit_breaker
-            else None,
+            circuit_breaker_config=workflow_data.circuit_breaker.dict() if workflow_data.circuit_breaker else None,
         )
 
         self.session.add(workflow_db)
@@ -264,23 +253,19 @@ class WorkflowService:
 
         return self._db_to_workflow(workflow_db)
 
-    def get_workflow(self, workflow_id: str) -> Optional[WorkflowDefinition]:
+    def get_workflow(self, workflow_id: str) -> WorkflowDefinition | None:
         """Get workflow by ID."""
         workflow_db = self.session.query(WorkflowDB).filter_by(id=workflow_id).first()
         return self._db_to_workflow(workflow_db) if workflow_db else None
 
     def list_workflows(
-        self,
-        enabled_only: bool = False,
-        trigger_type: Optional[str] = None,
-        limit: int = 100,
-        offset: int = 0
-    ) -> List[WorkflowDefinition]:
+        self, enabled_only: bool = False, trigger_type: str | None = None, limit: int = 100, offset: int = 0
+    ) -> list[WorkflowDefinition]:
         """List workflows with filtering."""
         query = self.session.query(WorkflowDB)
 
         if enabled_only:
-            query = query.filter(WorkflowDB.enabled == True)
+            query = query.filter(WorkflowDB.enabled.is_(True))
 
         if trigger_type:
             query = query.filter(WorkflowDB.trigger_type == trigger_type)
@@ -291,11 +276,7 @@ class WorkflowService:
         workflows_db = query.all()
         return [self._db_to_workflow(w) for w in workflows_db]
 
-    def update_workflow(
-        self,
-        workflow_id: str,
-        updates: WorkflowUpdateRequest
-    ) -> Optional[WorkflowDefinition]:
+    def update_workflow(self, workflow_id: str, updates: WorkflowUpdateRequest) -> WorkflowDefinition | None:
         """Update an existing workflow."""
         workflow_db = self.session.query(WorkflowDB).filter_by(id=workflow_id).first()
 
@@ -312,25 +293,22 @@ class WorkflowService:
             elif field == "conditions" and value is not None:
                 workflow_db.conditions = value
             elif field == "actions" and value is not None:
-                workflow_db.actions = [action.dict() if hasattr(action, 'dict') else action for action in value]
+                workflow_db.actions = [action.dict() if hasattr(action, "dict") else action for action in value]
             elif field == "circuit_breaker":
                 if value is None:
                     workflow_db.circuit_breaker_config = None
-                elif hasattr(value, 'dict'):
+                elif hasattr(value, "dict"):
                     workflow_db.circuit_breaker_config = value.dict()
                 else:
                     workflow_db.circuit_breaker_config = value
             elif hasattr(workflow_db, field):
                 setattr(workflow_db, field, value)
 
-        trigger = TriggerConfig(
-            type=workflow_db.trigger_type,
-            config=workflow_db.trigger_config or {}
-        )
+        trigger = TriggerConfig(type=workflow_db.trigger_type, config=workflow_db.trigger_config or {})
         actions_payload = self._coerce_actions(workflow_db.actions or [])
         self._validate_workflow_definition(trigger, actions_payload)
 
-        workflow_db.updated_at = datetime.now(timezone.utc)
+        workflow_db.updated_at = datetime.now(UTC)
         self.session.commit()
 
         logger.info(f"Updated workflow: {workflow_id}")
@@ -352,18 +330,18 @@ class WorkflowService:
 
     # ==================== Workflow Execution Tracking ====================
 
-    def get_active_workflows_for_trigger(self, trigger_type: str) -> List[WorkflowDefinition]:
+    def get_active_workflows_for_trigger(self, trigger_type: str) -> list[WorkflowDefinition]:
         """Get all enabled workflows for a specific trigger type."""
-        workflows_db = self.session.query(WorkflowDB).filter(
-            and_(
-                WorkflowDB.enabled == True,
-                WorkflowDB.trigger_type == trigger_type
-            )
-        ).order_by(WorkflowDB.priority.desc()).all()
+        workflows_db = (
+            self.session.query(WorkflowDB)
+            .filter(and_(WorkflowDB.enabled.is_(True), WorkflowDB.trigger_type == trigger_type))
+            .order_by(WorkflowDB.priority.desc())
+            .all()
+        )
 
         return [self._db_to_workflow(w) for w in workflows_db]
 
-    def can_execute_workflow(self, workflow_id: str) -> tuple[bool, Optional[str]]:
+    def can_execute_workflow(self, workflow_id: str) -> tuple[bool, str | None]:
         """
         Check if workflow can execute based on rate limiting and cooldown.
 
@@ -378,7 +356,7 @@ class WorkflowService:
         if not workflow_db.enabled:
             return False, "Workflow is disabled"
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Check cooldown
         if workflow_db.cooldown_seconds > 0 and workflow_db.last_executed_at:
@@ -389,12 +367,15 @@ class WorkflowService:
         # Check rate limiting
         if workflow_db.max_executions_per_hour:
             one_hour_ago = now - timedelta(hours=1)
-            recent_executions = self.session.query(WorkflowExecutionDB).filter(
-                and_(
-                    WorkflowExecutionDB.workflow_id == workflow_id,
-                    WorkflowExecutionDB.triggered_at >= one_hour_ago
+            recent_executions = (
+                self.session.query(WorkflowExecutionDB)
+                .filter(
+                    and_(
+                        WorkflowExecutionDB.workflow_id == workflow_id, WorkflowExecutionDB.triggered_at >= one_hour_ago
+                    )
                 )
-            ).count()
+                .count()
+            )
 
             if recent_executions >= workflow_db.max_executions_per_hour:
                 return False, f"Rate limit exceeded ({workflow_db.max_executions_per_hour}/hour)"
@@ -405,9 +386,9 @@ class WorkflowService:
         self,
         workflow_id: str,
         trigger_type: str,
-        trigger_event: Dict[str, Any],
-        workflow_snapshot: Dict[str, Any],
-        circuit_breaker_key: Optional[str] = None
+        trigger_event: dict[str, Any],
+        workflow_snapshot: dict[str, Any],
+        circuit_breaker_key: str | None = None,
     ) -> int:
         """Create workflow execution record."""
         execution_db = WorkflowExecutionDB(
@@ -415,9 +396,9 @@ class WorkflowService:
             trigger_type=trigger_type,
             trigger_event=self._json_safe(trigger_event),
             status="running",
-            started_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
             workflow_snapshot=self._json_safe(workflow_snapshot),
-            circuit_breaker_key=circuit_breaker_key
+            circuit_breaker_key=circuit_breaker_key,
         )
 
         self.session.add(execution_db)
@@ -429,9 +410,9 @@ class WorkflowService:
         self,
         execution_id: int,
         status: str,
-        actions_executed: Optional[List[Dict[str, Any]]] = None,
-        error_message: Optional[str] = None,
-        stack_trace: Optional[str] = None
+        actions_executed: list[dict[str, Any]] | None = None,
+        error_message: str | None = None,
+        stack_trace: str | None = None,
     ):
         """Update workflow execution record."""
         execution_db = self.session.query(WorkflowExecutionDB).filter_by(id=execution_id).first()
@@ -441,11 +422,11 @@ class WorkflowService:
             return
 
         execution_db.status = status
-        execution_db.completed_at = self._ensure_aware_utc(datetime.now(timezone.utc))
+        execution_db.completed_at = self._ensure_aware_utc(datetime.now(UTC))
 
         # Normalize started/completed timestamps to avoid naive vs aware subtraction
         if execution_db.started_at and execution_db.started_at.tzinfo is None:
-            execution_db.started_at = execution_db.started_at.replace(tzinfo=timezone.utc)
+            execution_db.started_at = execution_db.started_at.replace(tzinfo=UTC)
 
         started_at = self._ensure_aware_utc(execution_db.started_at)
         completed_at = self._ensure_aware_utc(execution_db.completed_at)
@@ -473,7 +454,7 @@ class WorkflowService:
             return
 
         workflow_db.execution_count += 1
-        workflow_db.last_executed_at = datetime.now(timezone.utc)
+        workflow_db.last_executed_at = datetime.now(UTC)
 
         if success:
             workflow_db.success_count += 1
@@ -485,12 +466,8 @@ class WorkflowService:
     # ==================== Execution History ====================
 
     def get_workflow_executions(
-        self,
-        workflow_id: Optional[str] = None,
-        status: Optional[str] = None,
-        limit: int = 100,
-        offset: int = 0
-    ) -> List[WorkflowExecutionRecord]:
+        self, workflow_id: str | None = None, status: str | None = None, limit: int = 100, offset: int = 0
+    ) -> list[WorkflowExecutionRecord]:
         """Get workflow execution history."""
         query = self.session.query(WorkflowExecutionDB)
 
@@ -510,10 +487,7 @@ class WorkflowService:
 
     def _db_to_workflow(self, workflow_db: WorkflowDB) -> WorkflowDefinition:
         """Convert database model to Pydantic model."""
-        trigger = TriggerConfig(
-            type=workflow_db.trigger_type,
-            config=workflow_db.trigger_config or {}
-        )
+        trigger = TriggerConfig(type=workflow_db.trigger_type, config=workflow_db.trigger_config or {})
 
         conditions = None
         if workflow_db.conditions:
@@ -543,7 +517,7 @@ class WorkflowService:
             execution_count=workflow_db.execution_count,
             last_executed_at=workflow_db.last_executed_at,
             success_count=workflow_db.success_count,
-            failure_count=workflow_db.failure_count
+            failure_count=workflow_db.failure_count,
         )
 
     def _db_to_execution(self, execution_db: WorkflowExecutionDB) -> WorkflowExecutionRecord:
@@ -562,5 +536,5 @@ class WorkflowService:
             completed_at=execution_db.completed_at,
             duration_ms=execution_db.duration_ms,
             workflow_snapshot=execution_db.workflow_snapshot,
-            circuit_breaker_key=execution_db.circuit_breaker_key
+            circuit_breaker_key=execution_db.circuit_breaker_key,
         )

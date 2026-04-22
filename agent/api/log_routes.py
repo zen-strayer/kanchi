@@ -1,11 +1,12 @@
 """API routes for logging endpoints."""
 
 import logging
-from datetime import datetime, timezone
-from fastapi import APIRouter, HTTPException, Depends
+from datetime import UTC, datetime
 
-from models import LogEntry
+from fastapi import APIRouter, Depends, HTTPException
+
 from config import Config
+from models import LogEntry
 from security.dependencies import get_auth_dependency
 
 
@@ -28,7 +29,7 @@ def create_router(app_state) -> APIRouter:
             return {
                 "status": "disabled",
                 "message": "Logging is only available in development mode",
-                "timestamp": datetime.now(timezone.utc).isoformat()
+                "timestamp": datetime.now(UTC).isoformat(),
             }
 
         try:
@@ -55,11 +56,8 @@ def create_router(app_state) -> APIRouter:
             # Log with the appropriate level
             logger.log(level, message)
 
-            return {
-                "status": "success",
-                "timestamp": datetime.now(timezone.utc).isoformat()
-            }
+            return {"status": "success", "timestamp": datetime.now(UTC).isoformat()}
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to log message: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Failed to log message: {str(e)}") from e
 
     return router

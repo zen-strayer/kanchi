@@ -2,28 +2,28 @@
 
 import json
 import logging
-from datetime import datetime, timezone, timedelta
-from typing import List, Dict, Any, Optional, Tuple, Union
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
-from sqlalchemy.orm import Session
-from sqlalchemy import desc, asc, or_, and_, func, String, cast, Integer, literal, inspect, case
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
-from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy import String, and_, asc, case, desc, func, or_
 from sqlalchemy.dialects.mysql import insert as mysql_insert
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.orm import Session
 
-from database import TaskEventDB, RetryRelationshipDB, TaskLatestDB, TaskResolutionDB
+from constants import ACTIVE_EVENT_TYPES, STATE_TO_EVENT_MAP, EventType, TaskState
+from database import RetryRelationshipDB, TaskEventDB, TaskLatestDB, TaskResolutionDB
 from models import TaskEvent
-from constants import TaskState, EventType, STATE_TO_EVENT_MAP, ACTIVE_EVENT_TYPES
 from services.utils import EnvironmentFilter, GenericFilter, parse_filter_string
 from utils.payload_sanitizer import find_placeholder_paths
 
 logger = logging.getLogger(__name__)
 
 
-def _ensure_utc(dt: Optional[datetime]) -> Optional[datetime]:
+def _ensure_utc(dt: datetime | None) -> datetime | None:
     if dt is None:
         return None
-    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
 
 
 class TaskService:
@@ -56,9 +56,7 @@ class TaskService:
             task_event.args = args
             task_event.kwargs = kwargs
 
-            task_event_db = self._create_task_event_db(
-                task_event, routing_key, queue, args, kwargs
-            )
+            task_event_db = self._create_task_event_db(task_event, routing_key, queue, args, kwargs)
 
             self.session.add(task_event_db)
             self.session.flush()  # Ensure task_event_db.id is available for snapshot upsert
@@ -71,7 +69,7 @@ class TaskService:
             logger.error(f"Failed to save task event {task_event.task_id[:8]}: {e}")
             raise
 
-    def get_task_events(self, task_id: str) -> List[TaskEvent]:
+    def get_task_events(self, task_id: str) -> list[TaskEvent]:
         """
         Get all events for a specific task.
 
@@ -81,12 +79,7 @@ class TaskService:
         Returns:
             List of task events ordered by timestamp
         """
-        events_db = (
-            self.session.query(TaskEventDB)
-            .filter_by(task_id=task_id)
-            .order_by(TaskEventDB.timestamp)
-            .all()
-        )
+        events_db = self.session.query(TaskEventDB).filter_by(task_id=task_id).order_by(TaskEventDB.timestamp).all()
 
         events = [self._db_to_task_event(event_db) for event_db in events_db]
 
@@ -107,17 +100,17 @@ class TaskService:
         limit: int = 100,
         page: int = 0,
         aggregate: bool = True,
-        sort_by: Optional[str] = None,
+        sort_by: str | None = None,
         sort_order: str = "desc",
-        search: Optional[str] = None,
-        filters: Optional[str] = None,
-        start_time: Optional[str] = None,
-        end_time: Optional[str] = None,
-        filter_state: Optional[str] = None,
-        filter_worker: Optional[str] = None,
-        filter_task: Optional[str] = None,
-        filter_queue: Optional[str] = None
-    ) -> Dict[str, Any]:
+        search: str | None = None,
+        filters: str | None = None,
+        start_time: str | None = None,
+        end_time: str | None = None,
+        filter_state: str | None = None,
+        filter_worker: str | None = None,
+        filter_task: str | None = None,
+        filter_queue: str | None = None,
+    ) -> dict[str, Any]:
         """
         Get recent task events with filtering and pagination.
 
@@ -141,15 +134,33 @@ class TaskService:
         """
         if aggregate:
             events, total_events = self._get_aggregated_events(
-                limit, page, sort_by, sort_order,
-                filters, start_time, end_time,
-                filter_state, filter_worker, filter_task, filter_queue, search
+                limit,
+                page,
+                sort_by,
+                sort_order,
+                filters,
+                start_time,
+                end_time,
+                filter_state,
+                filter_worker,
+                filter_task,
+                filter_queue,
+                search,
             )
         else:
             events, total_events = self._get_all_events(
-                limit, page, sort_by, sort_order,
-                filters, start_time, end_time,
-                filter_state, filter_worker, filter_task, filter_queue, search
+                limit,
+                page,
+                sort_by,
+                sort_order,
+                filters,
+                start_time,
+                end_time,
+                filter_state,
+                filter_worker,
+                filter_task,
+                filter_queue,
+                search,
             )
 
         total_pages = (total_events + limit - 1) // limit if limit > 0 else 1
@@ -162,11 +173,11 @@ class TaskService:
                 "total": total_events,
                 "total_pages": total_pages,
                 "has_next": page < total_pages - 1,
-                "has_prev": page > 0
-            }
+                "has_prev": page > 0,
+            },
         }
 
-    def get_active_tasks(self) -> List[TaskEvent]:
+    def get_active_tasks(self) -> list[TaskEvent]:
         """
         Get currently active tasks.
 
@@ -174,8 +185,7 @@ class TaskService:
             List of tasks with latest event being started/received/sent
         """
         latest_events_query = self.session.query(
-            TaskEventDB.task_id,
-            func.max(TaskEventDB.timestamp).label('max_timestamp')
+            TaskEventDB.task_id, func.max(TaskEventDB.timestamp).label("max_timestamp")
         )
 
         env_filtered_query = self.session.query(TaskEventDB.task_id)
@@ -193,8 +203,8 @@ class TaskService:
                 latest_events,
                 and_(
                     TaskEventDB.task_id == latest_events.c.task_id,
-                    TaskEventDB.timestamp == latest_events.c.max_timestamp
-                )
+                    TaskEventDB.timestamp == latest_events.c.max_timestamp,
+                ),
             )
             .filter(TaskEventDB.event_type.in_([et.value for et in ACTIVE_EVENT_TYPES]))
             .all()
@@ -206,33 +216,33 @@ class TaskService:
 
         return events
 
-    def get_unretried_orphaned_tasks(self) -> List[TaskEvent]:
+    def get_unretried_orphaned_tasks(self) -> list[TaskEvent]:
         """Get orphaned tasks that have not been retried and have no final-state event."""
         FINAL_STATES = {
-            'task-succeeded', 'task-failed', 'task-revoked',
-            'task-rejected', 'task-retried',
+            "task-succeeded",
+            "task-failed",
+            "task-revoked",
+            "task-rejected",
+            "task-retried",
         }
 
         # Latest orphaned event per task (same subquery as before, now in service)
-        latest_orphaned_sq = (
-            self.session.query(
-                TaskEventDB.task_id,
-                func.max(TaskEventDB.timestamp).label('max_timestamp'),
-            )
-            .filter(TaskEventDB.is_orphan == True)
-        )
+        latest_orphaned_sq = self.session.query(
+            TaskEventDB.task_id,
+            func.max(TaskEventDB.timestamp).label("max_timestamp"),
+        ).filter(TaskEventDB.is_orphan.is_(True))
 
         if self.active_env:
             env_conditions = []
             if self.active_env.queue_patterns:
                 queue_conditions = [
-                    TaskEventDB.queue.like(p.replace('*', '%').replace('?', '_'))
+                    TaskEventDB.queue.like(p.replace("*", "%").replace("?", "_"))
                     for p in self.active_env.queue_patterns
                 ]
                 env_conditions.append(or_(*queue_conditions))
             if self.active_env.worker_patterns:
                 worker_conditions = [
-                    TaskEventDB.hostname.like(p.replace('*', '%').replace('?', '_'))
+                    TaskEventDB.hostname.like(p.replace("*", "%").replace("?", "_"))
                     for p in self.active_env.worker_patterns
                 ]
                 env_conditions.append(or_(*worker_conditions))
@@ -265,9 +275,7 @@ class TaskService:
 
         # Batch query 1: retry relationships for all orphaned tasks at once
         retry_rels = (
-            self.session.query(RetryRelationshipDB)
-            .filter(RetryRelationshipDB.task_id.in_(orphaned_task_ids))
-            .all()
+            self.session.query(RetryRelationshipDB).filter(RetryRelationshipDB.task_id.in_(orphaned_task_ids)).all()
         )
         retry_map = {r.task_id: r for r in retry_rels}
 
@@ -284,17 +292,15 @@ class TaskService:
         }
 
         return [
-            event for event in orphaned_events
+            event
+            for event in orphaned_events
             if not (retry_map.get(event.task_id) and retry_map[event.task_id].retry_chain)
             and event.task_id not in tasks_with_final_state
         ]
 
     def get_recent_failed_tasks(
-        self,
-        hours: int = 24,
-        limit: int = 50,
-        exclude_retried: bool = True
-    ) -> List[TaskEvent]:
+        self, hours: int = 24, limit: int = 50, exclude_retried: bool = True
+    ) -> list[TaskEvent]:
         """
         Get failed tasks in the last ``hours`` where the latest event is a failure.
 
@@ -306,15 +312,11 @@ class TaskService:
         Returns:
             List of failed task events ordered by most recent failure first
         """
-        since = datetime.now(timezone.utc) - timedelta(hours=hours)
+        since = datetime.now(UTC) - timedelta(hours=hours)
 
-        latest_subquery = (
-            self.session.query(
-                TaskEventDB.task_id,
-                func.max(TaskEventDB.timestamp).label('max_timestamp')
-            )
-            .filter(TaskEventDB.timestamp >= since)
-        )
+        latest_subquery = self.session.query(
+            TaskEventDB.task_id, func.max(TaskEventDB.timestamp).label("max_timestamp")
+        ).filter(TaskEventDB.timestamp >= since)
 
         env_filtered_query = self.session.query(TaskEventDB.task_id)
         env_filtered_query = EnvironmentFilter.apply(env_filtered_query, self.active_env)
@@ -331,19 +333,14 @@ class TaskService:
                 latest_subquery,
                 and_(
                     TaskEventDB.task_id == latest_subquery.c.task_id,
-                    TaskEventDB.timestamp == latest_subquery.c.max_timestamp
-                )
+                    TaskEventDB.timestamp == latest_subquery.c.max_timestamp,
+                ),
             )
-            .filter(
-                TaskEventDB.event_type == EventType.TASK_FAILED.value,
-                TaskEventDB.timestamp >= since
-            )
+            .filter(TaskEventDB.event_type == EventType.TASK_FAILED.value, TaskEventDB.timestamp >= since)
         )
 
         if exclude_retried:
-            query = query.filter(
-                or_(TaskEventDB.has_retries.is_(False), TaskEventDB.has_retries.is_(None))
-            )
+            query = query.filter(or_(TaskEventDB.has_retries.is_(False), TaskEventDB.has_retries.is_(None)))
 
         query = query.order_by(TaskEventDB.timestamp.desc())
 
@@ -358,12 +355,7 @@ class TaskService:
 
         return events
 
-    def create_retry_relationship(
-        self,
-        original_task_id: str,
-        new_task_id: str,
-        retried_by: str = "system"
-    ):
+    def create_retry_relationship(self, original_task_id: str, new_task_id: str, retried_by: str = "system"):
         """
         Create a retry relationship between tasks.
 
@@ -377,18 +369,11 @@ class TaskService:
         """
         try:
             new_retry_rel = RetryRelationshipDB(
-                task_id=new_task_id,
-                original_id=original_task_id,
-                retry_chain=[],
-                total_retries=0
+                task_id=new_task_id, original_id=original_task_id, retry_chain=[], total_retries=0
             )
             self.session.add(new_retry_rel)
 
-            parent_rel = (
-                self.session.query(RetryRelationshipDB)
-                .filter_by(task_id=original_task_id)
-                .first()
-            )
+            parent_rel = self.session.query(RetryRelationshipDB).filter_by(task_id=original_task_id).first()
 
             if parent_rel:
                 if parent_rel.retry_chain:
@@ -398,18 +383,11 @@ class TaskService:
                 parent_rel.total_retries += 1
             else:
                 parent_rel = RetryRelationshipDB(
-                    task_id=original_task_id,
-                    original_id=original_task_id,
-                    retry_chain=[new_task_id],
-                    total_retries=1
+                    task_id=original_task_id, original_id=original_task_id, retry_chain=[new_task_id], total_retries=1
                 )
                 self.session.add(parent_rel)
 
-            original_events = (
-                self.session.query(TaskEventDB)
-                .filter_by(task_id=original_task_id)
-                .all()
-            )
+            original_events = self.session.query(TaskEventDB).filter_by(task_id=original_task_id).all()
 
             for event in original_events:
                 existing_retries = json.loads(event.retried_by) if event.retried_by else []
@@ -438,11 +416,7 @@ class TaskService:
             Exception: If database operation fails
         """
         try:
-            new_events = (
-                self.session.query(TaskEventDB)
-                .filter_by(task_id=new_task_id)
-                .all()
-            )
+            new_events = self.session.query(TaskEventDB).filter_by(task_id=new_task_id).all()
 
             for event in new_events:
                 event.retry_of = original_task_id
@@ -456,7 +430,7 @@ class TaskService:
             logger.error(f"Failed to mark task as retry: {e}")
             raise
 
-    def get_task_summary_stats(self) -> Dict[str, Any]:
+    def get_task_summary_stats(self) -> dict[str, Any]:
         """
         Get summary statistics for dashboard display.
 
@@ -466,32 +440,28 @@ class TaskService:
         event_stats = (
             self.session.query(
                 TaskEventDB.event_type,
-                func.count(TaskEventDB.id).label('total_events'),
-                func.count(func.distinct(TaskEventDB.task_id)).label('unique_tasks')
+                func.count(TaskEventDB.id).label("total_events"),
+                func.count(func.distinct(TaskEventDB.task_id)).label("unique_tasks"),
             )
             .group_by(TaskEventDB.event_type)
             .all()
         )
 
         recent_activity = (
-            self.session.query(func.count(TaskEventDB.id).label('last_hour_events'))
-            .filter(TaskEventDB.timestamp >= datetime.now(timezone.utc) - timedelta(hours=1))
+            self.session.query(func.count(TaskEventDB.id).label("last_hour_events"))
+            .filter(TaskEventDB.timestamp >= datetime.now(UTC) - timedelta(hours=1))
             .scalar()
         )
 
         return {
-            'event_distribution': [
-                {
-                    'event_type': stat.event_type,
-                    'total_events': stat.total_events,
-                    'unique_tasks': stat.unique_tasks
-                }
+            "event_distribution": [
+                {"event_type": stat.event_type, "total_events": stat.total_events, "unique_tasks": stat.unique_tasks}
                 for stat in event_stats
             ],
-            'recent_activity': recent_activity or 0
+            "recent_activity": recent_activity or 0,
         }
 
-    def _inherit_queue_info(self, task_event: TaskEvent) -> Tuple[str, str]:
+    def _inherit_queue_info(self, task_event: TaskEvent) -> tuple[str, str]:
         """
         Inherit queue information from previous task-sent event if not present.
 
@@ -504,7 +474,7 @@ class TaskService:
         routing_key = task_event.routing_key
         queue = task_event.queue
 
-        if not routing_key or routing_key == 'default':
+        if not routing_key or routing_key == "default":
             existing_sent_event = (
                 self.session.query(TaskEventDB)
                 .filter_by(task_id=task_event.task_id, event_type=EventType.TASK_SENT.value)
@@ -538,19 +508,17 @@ class TaskService:
         if not truncated_segments:
             return
 
-        details = "; ".join(
-            f"{field} @ {', '.join(paths)}" for field, paths in truncated_segments
-        )
+        details = "; ".join(f"{field} @ {', '.join(paths)}" for field, paths in truncated_segments)
         logger.warning(
             "Celery truncated payload data for task %s (%s). %s. "
             "Increase celery.amqp args/kwargs repr limits or serialize large structures "
             "before enqueuing if you need full visibility.",
             task_event.task_id,
             task_event.task_name,
-            details
+            details,
         )
 
-    def _parse_task_arguments(self, task_event: TaskEvent) -> Tuple[Any, Any]:
+    def _parse_task_arguments(self, task_event: TaskEvent) -> tuple[Any, Any]:
         """
         Parse and inherit task arguments from previous events if needed.
 
@@ -604,12 +572,7 @@ class TaskService:
         return field_value if field_value is not None else default
 
     def _create_task_event_db(
-        self,
-        task_event: TaskEvent,
-        routing_key: str,
-        queue: str,
-        args: Any,
-        kwargs: Any
+        self, task_event: TaskEvent, routing_key: str, queue: str, args: Any, kwargs: Any
     ) -> TaskEventDB:
         """
         Create a TaskEventDB model from a TaskEvent.
@@ -644,19 +607,18 @@ class TaskService:
             result=(
                 task_event.result
                 if isinstance(task_event.result, (list, dict))
-                else str(task_event.result) if task_event.result else None
+                else str(task_event.result)
+                if task_event.result
+                else None
             ),
             runtime=task_event.runtime,
             exception=task_event.exception,
             traceback=task_event.traceback,
             retry_of=task_event.retry_of.task_id if task_event.retry_of else None,
-            retried_by=(
-                json.dumps([t.task_id for t in task_event.retried_by])
-                if task_event.retried_by else None
-            ),
+            retried_by=(json.dumps([t.task_id for t in task_event.retried_by]) if task_event.retried_by else None),
             is_retry=task_event.is_retry,
             has_retries=task_event.has_retries,
-            retry_count=task_event.retry_count
+            retry_count=task_event.retry_count,
         )
 
     def _upsert_task_latest(self, event_db: TaskEventDB):
@@ -705,10 +667,10 @@ class TaskService:
                 index_elements=[TaskLatestDB.task_id],
                 set_=data,
                 where=(
-                    (stmt.excluded.timestamp > TaskLatestDB.timestamp) |
-                    (
-                        (stmt.excluded.timestamp == TaskLatestDB.timestamp) &
-                        (stmt.excluded.event_id > TaskLatestDB.event_id)
+                    (stmt.excluded.timestamp > TaskLatestDB.timestamp)
+                    | (
+                        (stmt.excluded.timestamp == TaskLatestDB.timestamp)
+                        & (stmt.excluded.event_id > TaskLatestDB.event_id)
                     )
                 ),
             )
@@ -717,18 +679,11 @@ class TaskService:
 
         if dialect == "mysql":
             stmt = mysql_insert(TaskLatestDB).values(**data)
-            is_newer_event = (
-                (stmt.inserted.timestamp > TaskLatestDB.timestamp) |
-                (
-                    (stmt.inserted.timestamp == TaskLatestDB.timestamp) &
-                    (stmt.inserted.event_id > TaskLatestDB.event_id)
-                )
+            is_newer_event = (stmt.inserted.timestamp > TaskLatestDB.timestamp) | (
+                (stmt.inserted.timestamp == TaskLatestDB.timestamp) & (stmt.inserted.event_id > TaskLatestDB.event_id)
             )
             update_values = {
-                field: case(
-                    (is_newer_event, getattr(stmt.inserted, field)),
-                    else_=getattr(TaskLatestDB, field)
-                )
+                field: case((is_newer_event, getattr(stmt.inserted, field)), else_=getattr(TaskLatestDB, field))
                 for field in data.keys()
             }
             stmt = stmt.on_duplicate_key_update(**update_values)
@@ -741,10 +696,10 @@ class TaskService:
                 index_elements=[TaskLatestDB.task_id],
                 set_=data,
                 where=(
-                    (stmt.excluded.timestamp > TaskLatestDB.timestamp) |
-                    (
-                        (stmt.excluded.timestamp == TaskLatestDB.timestamp) &
-                        (stmt.excluded.event_id > TaskLatestDB.event_id)
+                    (stmt.excluded.timestamp > TaskLatestDB.timestamp)
+                    | (
+                        (stmt.excluded.timestamp == TaskLatestDB.timestamp)
+                        & (stmt.excluded.event_id > TaskLatestDB.event_id)
                     )
                 ),
             )
@@ -752,11 +707,7 @@ class TaskService:
             return
 
         # Generic fallback for other dialects
-        existing = (
-            self.session.query(TaskLatestDB)
-            .filter(TaskLatestDB.task_id == event_db.task_id)
-            .one_or_none()
-        )
+        existing = self.session.query(TaskLatestDB).filter(TaskLatestDB.task_id == event_db.task_id).one_or_none()
 
         if not existing:
             self.session.add(TaskLatestDB(**data))
@@ -765,28 +716,21 @@ class TaskService:
         event_ts = _ensure_utc(event_db.timestamp)
         existing_ts = _ensure_utc(existing.timestamp)
 
-        if (
-            event_ts > existing_ts or
-            (
-                event_ts == existing_ts and
-                event_db.id is not None and
-                (existing.event_id is None or event_db.id > existing.event_id)
-            )
+        if event_ts > existing_ts or (
+            event_ts == existing_ts
+            and event_db.id is not None
+            and (existing.event_id is None or event_db.id > existing.event_id)
         ):
             for field, value in data.items():
                 setattr(existing, field, value)
 
-    def set_task_resolution(self, task_id: str, resolved_by: Optional[str] = None) -> TaskResolutionDB:
+    def set_task_resolution(self, task_id: str, resolved_by: str | None = None) -> TaskResolutionDB:
         """
         Mark a task as manually resolved.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         try:
-            resolution = (
-                self.session.query(TaskResolutionDB)
-                .filter(TaskResolutionDB.task_id == task_id)
-                .one_or_none()
-            )
+            resolution = self.session.query(TaskResolutionDB).filter(TaskResolutionDB.task_id == task_id).one_or_none()
 
             if resolution:
                 resolution.resolved = True
@@ -814,11 +758,7 @@ class TaskService:
         Remove manual resolution mark from a task.
         """
         try:
-            (
-                self.session.query(TaskResolutionDB)
-                .filter(TaskResolutionDB.task_id == task_id)
-                .delete()
-            )
+            (self.session.query(TaskResolutionDB).filter(TaskResolutionDB.task_id == task_id).delete())
             self._update_task_latest_resolution(task_id, False, None, None)
             self.session.commit()
         except Exception as exc:
@@ -830,17 +770,13 @@ class TaskService:
         self,
         task_id: str,
         resolved: bool,
-        resolved_by: Optional[str],
-        resolved_at: Optional[datetime],
+        resolved_by: str | None,
+        resolved_at: datetime | None,
     ) -> None:
         """
         Keep resolution fields in the task_latest snapshot in sync.
         """
-        latest = (
-            self.session.query(TaskLatestDB)
-            .filter(TaskLatestDB.task_id == task_id)
-            .one_or_none()
-        )
+        latest = self.session.query(TaskLatestDB).filter(TaskLatestDB.task_id == task_id).one_or_none()
         if not latest:
             return
 
@@ -848,7 +784,7 @@ class TaskService:
         latest.resolved_by = resolved_by
         latest.resolved_at = _ensure_utc(resolved_at)
 
-    def _db_to_task_event(self, event_db: Union[TaskEventDB, TaskLatestDB]) -> TaskEvent:
+    def _db_to_task_event(self, event_db: TaskEventDB | TaskLatestDB) -> TaskEvent:
         """
         Convert database model to TaskEvent object.
 
@@ -881,7 +817,7 @@ class TaskService:
             result=event_db.result,
             runtime=event_db.runtime,
             exception=event_db.exception,
-            traceback=event_db.traceback
+            traceback=event_db.traceback,
         )
 
         task_event.is_orphan = event_db.is_orphan or False
@@ -901,7 +837,7 @@ class TaskService:
         """
         self._bulk_enrich_with_retry_info([task_event])
 
-    def _bulk_enrich_with_retry_info(self, events: List[TaskEvent]):
+    def _bulk_enrich_with_retry_info(self, events: list[TaskEvent]):
         """
         Bulk enrich multiple task events with retry information in a single query.
 
@@ -917,9 +853,7 @@ class TaskService:
         task_ids = [event.task_id for event in events]
 
         retry_relationships = (
-            self.session.query(RetryRelationshipDB)
-            .filter(RetryRelationshipDB.task_id.in_(task_ids))
-            .all()
+            self.session.query(RetryRelationshipDB).filter(RetryRelationshipDB.task_id.in_(task_ids)).all()
         )
 
         retry_map = {rel.task_id: rel for rel in retry_relationships}
@@ -948,7 +882,7 @@ class TaskService:
             else:
                 self._set_default_retry_info(event)
 
-    def _fetch_related_tasks(self, task_ids: set) -> Dict[str, TaskEvent]:
+    def _fetch_related_tasks(self, task_ids: set) -> dict[str, TaskEvent]:
         """
         Fetch latest events for related tasks in bulk.
 
@@ -959,10 +893,7 @@ class TaskService:
             Dictionary mapping task_id to TaskEvent
         """
         latest_events_subquery = (
-            self.session.query(
-                TaskEventDB.task_id,
-                func.max(TaskEventDB.timestamp).label('max_timestamp')
-            )
+            self.session.query(TaskEventDB.task_id, func.max(TaskEventDB.timestamp).label("max_timestamp"))
             .filter(TaskEventDB.task_id.in_(task_ids))
             .group_by(TaskEventDB.task_id)
             .subquery()
@@ -974,8 +905,8 @@ class TaskService:
                 latest_events_subquery,
                 and_(
                     TaskEventDB.task_id == latest_events_subquery.c.task_id,
-                    TaskEventDB.timestamp == latest_events_subquery.c.max_timestamp
-                )
+                    TaskEventDB.timestamp == latest_events_subquery.c.max_timestamp,
+                ),
             )
             .all()
         )
@@ -989,7 +920,7 @@ class TaskService:
 
         return related_tasks_map
 
-    def _attach_resolution_info(self, events: List[TaskEvent]) -> None:
+    def _attach_resolution_info(self, events: list[TaskEvent]) -> None:
         """
         Attach manual resolution metadata to task events in bulk.
         """
@@ -1000,11 +931,7 @@ class TaskService:
         if not task_ids:
             return
 
-        resolutions = (
-            self.session.query(TaskResolutionDB)
-            .filter(TaskResolutionDB.task_id.in_(task_ids))
-            .all()
-        )
+        resolutions = self.session.query(TaskResolutionDB).filter(TaskResolutionDB.task_id.in_(task_ids)).all()
         resolution_map = {resolution.task_id: resolution for resolution in resolutions}
 
         for event in events:
@@ -1014,10 +941,7 @@ class TaskService:
             event.resolved_at = _ensure_utc(resolution.resolved_at) if resolution else None
 
     def _populate_retry_info(
-        self,
-        event: TaskEvent,
-        retry_rel: RetryRelationshipDB,
-        related_tasks_map: Dict[str, TaskEvent]
+        self, event: TaskEvent, retry_rel: RetryRelationshipDB, related_tasks_map: dict[str, TaskEvent]
     ):
         """
         Populate retry information for an event.
@@ -1052,7 +976,7 @@ class TaskService:
 
         event.retry_count = retry_rel.total_retries
 
-    def _fetch_single_task(self, task_id: str) -> Optional[TaskEvent]:
+    def _fetch_single_task(self, task_id: str) -> TaskEvent | None:
         """
         Fetch a single task event (fallback for missing bulk fetch).
 
@@ -1063,10 +987,7 @@ class TaskService:
             TaskEvent or None if not found
         """
         event_db = (
-            self.session.query(TaskEventDB)
-            .filter_by(task_id=task_id)
-            .order_by(TaskEventDB.timestamp.desc())
-            .first()
+            self.session.query(TaskEventDB).filter_by(task_id=task_id).order_by(TaskEventDB.timestamp.desc()).first()
         )
 
         if event_db:
@@ -1094,17 +1015,17 @@ class TaskService:
         self,
         limit: int,
         page: int,
-        sort_by: Optional[str],
+        sort_by: str | None,
         sort_order: str,
-        filters: Optional[str],
-        start_time: Optional[str],
-        end_time: Optional[str],
-        filter_state: Optional[str],
-        filter_worker: Optional[str],
-        filter_task: Optional[str],
-        filter_queue: Optional[str],
-        search: Optional[str]
-    ) -> Tuple[List[TaskEvent], int]:
+        filters: str | None,
+        start_time: str | None,
+        end_time: str | None,
+        filter_state: str | None,
+        filter_worker: str | None,
+        filter_task: str | None,
+        filter_queue: str | None,
+        search: str | None,
+    ) -> tuple[list[TaskEvent], int]:
         """
         Get all task events (non-aggregated) with filtering and pagination.
 
@@ -1117,8 +1038,7 @@ class TaskService:
         query = self.session.query(TaskEventDB)
         query = EnvironmentFilter.apply(query, self.active_env)
         query = self._apply_all_filters(
-            query, filters, start_time, end_time,
-            filter_state, filter_worker, filter_task, filter_queue, search
+            query, filters, start_time, end_time, filter_state, filter_worker, filter_task, filter_queue, search
         )
         total_events = query.with_entities(func.count(TaskEventDB.id)).scalar()
 
@@ -1136,17 +1056,17 @@ class TaskService:
         self,
         limit: int,
         page: int,
-        sort_by: Optional[str],
+        sort_by: str | None,
         sort_order: str,
-        filters: Optional[str],
-        start_time: Optional[str],
-        end_time: Optional[str],
-        filter_state: Optional[str],
-        filter_worker: Optional[str],
-        filter_task: Optional[str],
-        filter_queue: Optional[str],
-        search: Optional[str]
-    ) -> Tuple[List[TaskEvent], int]:
+        filters: str | None,
+        start_time: str | None,
+        end_time: str | None,
+        filter_state: str | None,
+        filter_worker: str | None,
+        filter_task: str | None,
+        filter_queue: str | None,
+        search: str | None,
+    ) -> tuple[list[TaskEvent], int]:
         """
         Get aggregated task events (latest per task) with filtering and pagination.
 
@@ -1157,34 +1077,51 @@ class TaskService:
             Tuple of (events list, total count)
         """
         return self._get_aggregated_events_from_latest(
-            limit, page, sort_by, sort_order, filters, start_time, end_time,
-            filter_state, filter_worker, filter_task, filter_queue, search
+            limit,
+            page,
+            sort_by,
+            sort_order,
+            filters,
+            start_time,
+            end_time,
+            filter_state,
+            filter_worker,
+            filter_task,
+            filter_queue,
+            search,
         )
 
     def _get_aggregated_events_from_latest(
         self,
         limit: int,
         page: int,
-        sort_by: Optional[str],
+        sort_by: str | None,
         sort_order: str,
-        filters: Optional[str],
-        start_time: Optional[str],
-        end_time: Optional[str],
-        filter_state: Optional[str],
-        filter_worker: Optional[str],
-        filter_task: Optional[str],
-        filter_queue: Optional[str],
-        search: Optional[str]
-    ) -> Tuple[List[TaskEvent], int]:
+        filters: str | None,
+        start_time: str | None,
+        end_time: str | None,
+        filter_state: str | None,
+        filter_worker: str | None,
+        filter_task: str | None,
+        filter_queue: str | None,
+        search: str | None,
+    ) -> tuple[list[TaskEvent], int]:
         """
         Fetch aggregated events from the task_latest snapshot table.
         """
         query = self.session.query(TaskLatestDB)
         query = EnvironmentFilter.apply(query, self.active_env, model=TaskLatestDB)
         query = self._apply_all_filters(
-            query, filters, start_time, end_time,
-            filter_state, filter_worker, filter_task, filter_queue, search,
-            model=TaskLatestDB
+            query,
+            filters,
+            start_time,
+            end_time,
+            filter_state,
+            filter_worker,
+            filter_task,
+            filter_queue,
+            search,
+            model=TaskLatestDB,
         )
         total_events = query.with_entities(func.count(TaskLatestDB.task_id)).scalar()
 
@@ -1197,19 +1134,18 @@ class TaskService:
         self._attach_resolution_info(events)
         return events, total_events
 
-
     def _apply_all_filters(
         self,
         query,
-        filters: Optional[str],
-        start_time: Optional[str],
-        end_time: Optional[str],
-        filter_state: Optional[str],
-        filter_worker: Optional[str],
-        filter_task: Optional[str],
-        filter_queue: Optional[str],
-        search: Optional[str],
-        model=TaskEventDB
+        filters: str | None,
+        start_time: str | None,
+        end_time: str | None,
+        filter_state: str | None,
+        filter_worker: str | None,
+        filter_task: str | None,
+        filter_queue: str | None,
+        search: str | None,
+        model=TaskEventDB,
     ):
         """Apply all filters to a query."""
         query = self._apply_time_filters(query, start_time, end_time, model=model)
@@ -1218,12 +1154,13 @@ class TaskService:
         )
         return query
 
-    def _apply_time_filters(self, query, start_time: Optional[str], end_time: Optional[str], model=TaskEventDB):
+    def _apply_time_filters(self, query, start_time: str | None, end_time: str | None, model=TaskEventDB):
         """Apply time range filters to a query."""
-        timestamp_column = getattr(model, 'timestamp')
+        timestamp_column = model.timestamp
         if start_time:
             try:
                 from dateutil import parser
+
                 start_dt = parser.isoparse(start_time)
                 query = query.filter(timestamp_column >= start_dt)
             except (ValueError, ImportError) as e:
@@ -1232,6 +1169,7 @@ class TaskService:
         if end_time:
             try:
                 from dateutil import parser
+
                 end_dt = parser.isoparse(end_time)
                 query = query.filter(timestamp_column <= end_dt)
             except (ValueError, ImportError) as e:
@@ -1242,13 +1180,13 @@ class TaskService:
     def _apply_content_filters(
         self,
         query,
-        filters: Optional[str],
-        filter_state: Optional[str],
-        filter_worker: Optional[str],
-        filter_task: Optional[str],
-        filter_queue: Optional[str],
-        search: Optional[str],
-        model=TaskEventDB
+        filters: str | None,
+        filter_state: str | None,
+        filter_worker: str | None,
+        filter_task: str | None,
+        filter_queue: str | None,
+        search: str | None,
+        model=TaskEventDB,
     ):
         """Apply content filters (state, worker, task, queue, search) to a query."""
         parsed_filters = parse_filter_string(filters) if filters else []
@@ -1257,60 +1195,55 @@ class TaskService:
             query = self._apply_single_filter(query, filter_obj, model=model)
 
         if filter_state:
-            query = self._apply_state_filter(query, 'is', [filter_state], model=model)
+            query = self._apply_state_filter(query, "is", [filter_state], model=model)
 
         if filter_worker:
-            query = GenericFilter.apply(
-                query, getattr(model, 'hostname'), 'contains', [filter_worker]
-            )
+            query = GenericFilter.apply(query, model.hostname, "contains", [filter_worker])
 
         if filter_task:
-            query = GenericFilter.apply(
-                query, getattr(model, 'task_name'), 'contains', [filter_task]
-            )
+            query = GenericFilter.apply(query, model.task_name, "contains", [filter_task])
 
         if filter_queue:
-            query = GenericFilter.apply(
-                query, getattr(model, 'routing_key'), 'contains', [filter_queue]
-            )
+            query = GenericFilter.apply(query, model.routing_key, "contains", [filter_queue])
 
         if search:
             search_pattern = f"%{search}%"
             query = query.filter(
                 or_(
-                    getattr(model, 'task_name').ilike(search_pattern),
-                    getattr(model, 'task_id').ilike(search_pattern),
-                    getattr(model, 'hostname').ilike(search_pattern),
-                    getattr(model, 'event_type').ilike(search_pattern),
-                    func.cast(getattr(model, 'args'), String).ilike(search_pattern),
-                    func.cast(getattr(model, 'kwargs'), String).ilike(search_pattern)
+                    model.task_name.ilike(search_pattern),
+                    model.task_id.ilike(search_pattern),
+                    model.hostname.ilike(search_pattern),
+                    model.event_type.ilike(search_pattern),
+                    func.cast(model.args, String).ilike(search_pattern),
+                    func.cast(model.kwargs, String).ilike(search_pattern),
                 )
             )
 
         return query
 
-    def _apply_single_filter(self, query, filter_obj: Dict[str, Any], model=TaskEventDB):
+    def _apply_single_filter(self, query, filter_obj: dict[str, Any], model=TaskEventDB):
         """Apply a single parsed filter to the query."""
-        field = filter_obj['field']
-        operator = filter_obj['operator']
-        values = filter_obj['values']
+        field = filter_obj["field"]
+        operator = filter_obj["operator"]
+        values = filter_obj["values"]
 
-        if field == 'state':
+        if field == "state":
             return self._apply_state_filter(query, operator, values, model=model)
-        elif field == 'worker':
-            return GenericFilter.apply(query, getattr(model, 'hostname'), operator, values)
-        elif field == 'task':
-            return GenericFilter.apply(query, getattr(model, 'task_name'), operator, values)
-        elif field == 'queue':
-            return GenericFilter.apply(query, getattr(model, 'routing_key'), operator, values)
-        elif field == 'id':
-            return GenericFilter.apply(query, getattr(model, 'task_id'), operator, values)
+        elif field == "worker":
+            return GenericFilter.apply(query, model.hostname, operator, values)
+        elif field == "task":
+            return GenericFilter.apply(query, model.task_name, operator, values)
+        elif field == "queue":
+            return GenericFilter.apply(query, model.routing_key, operator, values)
+        elif field == "id":
+            return GenericFilter.apply(query, model.task_id, operator, values)
 
         return query
 
-    def _apply_state_filter(self, query, operator: str, values: List[str], model=TaskEventDB):
+    def _apply_state_filter(self, query, operator: str, values: list[str], model=TaskEventDB):
         """Apply state filter with operator support."""
-        def state_to_event_type(state: str) -> Optional[str]:
+
+        def state_to_event_type(state: str) -> str | None:
             try:
                 task_state = TaskState(state.upper())
                 event_type = STATE_TO_EVENT_MAP.get(task_state)
@@ -1318,11 +1251,9 @@ class TaskService:
             except (ValueError, KeyError):
                 return None
 
-        return GenericFilter.apply(
-            query, getattr(model, 'event_type'), operator, values, state_to_event_type
-        )
+        return GenericFilter.apply(query, model.event_type, operator, values, state_to_event_type)
 
-    def _apply_sorting(self, query, sort_by: Optional[str], sort_order: str, model=TaskEventDB):
+    def _apply_sorting(self, query, sort_by: str | None, sort_order: str, model=TaskEventDB):
         """Apply sorting to a query."""
         if sort_by:
             sort_column = getattr(model, sort_by, None)
@@ -1333,12 +1264,12 @@ class TaskService:
                     query = query.order_by(asc(sort_column))
                 return query
 
-        timestamp_column = getattr(model, 'timestamp')
-        id_column = getattr(model, 'id', None)
+        timestamp_column = model.timestamp
+        id_column = getattr(model, "id", None)
         if id_column is not None:
             query = query.order_by(desc(timestamp_column), desc(id_column))
         else:
-            task_id_column = getattr(model, 'task_id', None)
+            task_id_column = getattr(model, "task_id", None)
             if task_id_column is not None:
                 query = query.order_by(desc(timestamp_column), desc(task_id_column))
             else:

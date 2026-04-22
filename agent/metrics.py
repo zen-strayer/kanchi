@@ -1,27 +1,26 @@
 import threading
-from datetime import datetime, timezone
-from typing import Dict, Tuple, Optional
+from datetime import UTC, datetime
 
 from prometheus_client import Counter, Gauge, Histogram
 
-from constants import EventType, COMPLETED_EVENT_TYPES
+from constants import COMPLETED_EVENT_TYPES, EventType
 from models import TaskEvent, WorkerEvent
 
 
-def _timestamp(dt: Optional[datetime]) -> float:
+def _timestamp(dt: datetime | None) -> float:
     """Convert datetime to UTC timestamp."""
     if dt is None:
-        return datetime.now(timezone.utc).timestamp()
+        return datetime.now(UTC).timestamp()
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
     return dt.timestamp()
 
 
-def _safe_task_name(task_name: Optional[str]) -> str:
+def _safe_task_name(task_name: str | None) -> str:
     return task_name or "unknown"
 
 
-def _safe_worker(worker: Optional[str]) -> str:
+def _safe_worker(worker: str | None) -> str:
     return worker or "unknown"
 
 
@@ -58,10 +57,10 @@ class MetricsCollector:
             ["worker"],
         )
 
-        self._received_at: Dict[str, float] = {}
-        self._started_at: Dict[str, float] = {}
-        self._prefetched_counts: Dict[Tuple[str, str], int] = {}
-        self._active_counts: Dict[str, int] = {}
+        self._received_at: dict[str, float] = {}
+        self._started_at: dict[str, float] = {}
+        self._prefetched_counts: dict[tuple[str, str], int] = {}
+        self._active_counts: dict[str, int] = {}
         self._lock = threading.Lock()
 
     def record_task_event(self, task_event: TaskEvent):
@@ -88,9 +87,7 @@ class MetricsCollector:
             self._update_active(worker, delta=1)
             return
 
-        if task_event.event_type in COMPLETED_EVENT_TYPES or (
-            task_event.event_type == EventType.TASK_RETRIED.value
-        ):
+        if task_event.event_type in COMPLETED_EVENT_TYPES or (task_event.event_type == EventType.TASK_RETRIED.value):
             self._record_execution_duration(task_event, task_name, worker, ts)
             self._update_active(worker, delta=-1)
             self._update_prefetch(task_name, worker, delta=-1)
@@ -110,9 +107,7 @@ class MetricsCollector:
             self._set_active(worker, 0)
             self._reset_prefetch_for_worker(worker)
 
-    def _record_queue_wait(
-        self, task_id: str, task_name: str, worker: str, started_ts: float
-    ):
+    def _record_queue_wait(self, task_id: str, task_name: str, worker: str, started_ts: float):
         with self._lock:
             received_ts = self._received_at.pop(task_id, None)
 
@@ -125,9 +120,7 @@ class MetricsCollector:
             worker=worker,
         ).set(wait_seconds)
 
-    def _record_execution_duration(
-        self, task_event: TaskEvent, task_name: str, worker: str, ts: float
-    ):
+    def _record_execution_duration(self, task_event: TaskEvent, task_name: str, worker: str, ts: float):
         duration = task_event.runtime
         start_ts = None
 

@@ -3,7 +3,7 @@
 import logging
 import threading
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from database import DatabaseManager
 from event_handler import EventHandler
@@ -59,21 +59,21 @@ class WorkerHealthMonitor:
 
     def _check_worker_health(self):
         """Check all workers for staleness and mark offline workers."""
-        current_time = datetime.now(timezone.utc)
+        current_time = datetime.now(UTC)
         timeout_threshold = current_time - timedelta(seconds=self.worker_timeout)
 
         workers = self.monitor_instance.get_workers_info()
         offline_workers = []
 
         for hostname, worker_data in workers.items():
-            last_seen = worker_data.get('timestamp')
-            current_status = worker_data.get('status', 'unknown')
+            last_seen = worker_data.get("timestamp")
+            current_status = worker_data.get("status", "unknown")
 
             if last_seen and isinstance(last_seen, datetime):
-                if last_seen < timeout_threshold and current_status == 'online':
+                if last_seen < timeout_threshold and current_status == "online":
                     logger.warning(f"Worker {hostname} appears offline (last seen: {last_seen})")
 
-                    workers[hostname]['status'] = 'offline'
+                    workers[hostname]["status"] = "offline"
                     offline_workers.append(hostname)
                     self._mark_worker_tasks_as_orphaned(hostname, current_time)
 
@@ -98,9 +98,7 @@ class WorkerHealthMonitor:
                 orphan_service = OrphanDetectionService(session)
 
                 orphaned_tasks = orphan_service.find_and_mark_orphaned_tasks(
-                    hostname=hostname,
-                    orphaned_at=orphaned_at,
-                    grace_period_seconds=self.orphan_grace_period
+                    hostname=hostname, orphaned_at=orphaned_at, grace_period_seconds=self.orphan_grace_period
                 )
 
                 if orphaned_tasks:
@@ -109,7 +107,4 @@ class WorkerHealthMonitor:
                     )
 
         except Exception as e:
-            logger.error(
-                f"Error marking tasks as orphaned for worker {hostname}: {e}",
-                exc_info=True
-            )
+            logger.error(f"Error marking tasks as orphaned for worker {hostname}: {e}", exc_info=True)

@@ -1,2 +1,1 @@
 """Security utilities for Kanchi."""
-

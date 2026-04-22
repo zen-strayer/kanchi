@@ -1,12 +1,12 @@
 import unittest
 
-from services.app_config_service import (
-    AppConfigService,
-    TASK_ISSUE_LOOKBACK_KEY,
-)
-from models import AppSettingUpdate
-from tests.base import DatabaseTestCase
 from database import AppSettingDB
+from models import AppSettingUpdate
+from services.app_config_service import (
+    TASK_ISSUE_LOOKBACK_KEY,
+    AppConfigService,
+)
+from tests.base import DatabaseTestCase
 
 
 class TestAppConfigService(DatabaseTestCase):
@@ -16,11 +16,7 @@ class TestAppConfigService(DatabaseTestCase):
         self.service.ensure_defaults()
 
     def test_ensure_defaults_persists_task_issue_setting(self):
-        setting = (
-            self.session.query(AppSettingDB)
-            .filter_by(key=TASK_ISSUE_LOOKBACK_KEY)
-            .first()
-        )
+        setting = self.session.query(AppSettingDB).filter_by(key=TASK_ISSUE_LOOKBACK_KEY).first()
         self.assertIsNotNone(setting)
         self.assertEqual(setting.value, 24)
         self.assertEqual(setting.category, "task_issue_summary")

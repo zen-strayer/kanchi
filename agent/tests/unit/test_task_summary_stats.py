@@ -1,16 +1,14 @@
-import unittest
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 
 from services.task_service import TaskService
 from tests.base import DatabaseTestCase
 
 
 class TestGetTaskSummaryStats(DatabaseTestCase):
-
     def setUp(self):
         super().setUp()
         self.service = TaskService(self.session)
-        self.now = datetime.now(timezone.utc)
+        self.now = datetime.now(UTC)
 
     def test_recent_activity_counts_events_within_last_hour(self):
         # Event 30 minutes ago — should be counted
@@ -28,12 +26,12 @@ class TestGetTaskSummaryStats(DatabaseTestCase):
 
         result = self.service.get_task_summary_stats()
 
-        self.assertEqual(result['recent_activity'], 1)
+        self.assertEqual(result["recent_activity"], 1)
 
     def test_recent_activity_returns_zero_when_no_events(self):
         result = self.service.get_task_summary_stats()
 
-        self.assertEqual(result['recent_activity'], 0)
+        self.assertEqual(result["recent_activity"], 0)
 
     def test_recent_activity_counts_all_events_within_last_hour(self):
         for i in range(5):
@@ -45,4 +43,4 @@ class TestGetTaskSummaryStats(DatabaseTestCase):
 
         result = self.service.get_task_summary_stats()
 
-        self.assertEqual(result['recent_activity'], 5)
+        self.assertEqual(result["recent_activity"], 5)
