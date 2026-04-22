@@ -1,4 +1,5 @@
 import asyncio
+import fnmatch
 import logging
 
 from fastapi import WebSocket
@@ -13,6 +14,7 @@ class ConnectionManager:
         self.active_connections: list[WebSocket] = []
         self.client_filters: dict[WebSocket, dict] = {}
         self.client_modes: dict[WebSocket, str] = {}
+        self.client_environments: dict[WebSocket, dict | None] = {}
         self.message_queue: asyncio.Queue | None = None
         self._broadcast_task = None
         self._running = False
@@ -63,6 +65,7 @@ class ConnectionManager:
         self.active_connections.append(websocket)
         self.client_filters[websocket] = {}
         self.client_modes[websocket] = "live"
+        self.client_environments[websocket] = None
         logger.info(f"Client connected. Total connections: {len(self.active_connections)}")
 
         if len(self.active_connections) == 1:
@@ -75,6 +78,8 @@ class ConnectionManager:
             del self.client_filters[websocket]
         if websocket in self.client_modes:
             del self.client_modes[websocket]
+        if websocket in self.client_environments:
+            del self.client_environments[websocket]
         logger.info(f"Client disconnected. Total connections: {len(self.active_connections)}")
 
     def queue_broadcast(self, task_event: TaskEvent):
@@ -119,6 +124,10 @@ class ConnectionManager:
                     if not self._should_send_to_client(event, filters):
                         continue
 
+                    env = self.client_environments.get(connection)
+                    if not self._matches_environment(event, env):
+                        continue
+
                 await connection.send_text(message)
             except Exception as e:
                 logger.error(f"Error broadcasting to client: {e}")
@@ -148,6 +157,37 @@ class ConnectionManager:
         if mode in ["live", "static"]:
             self.client_modes[websocket] = mode
             logger.info(f"Client mode set to: {mode}")
+
+    def set_client_environment(self, websocket: WebSocket, queue_patterns: list[str], worker_patterns: list[str]):
+        """Register environment filter patterns for a client connection."""
+        self.client_environments[websocket] = {
+            "queue_patterns": queue_patterns,
+            "worker_patterns": worker_patterns,
+        }
+
+    def _matches_environment(self, event, env: dict | None) -> bool:
+        """Return True if the event matches the environment filter patterns.
+
+        When no environment is registered (env is None), all events pass through.
+        An event must satisfy both queue_patterns and worker_patterns (if non-empty).
+        """
+        if not env:
+            return True
+
+        queue_patterns = env.get("queue_patterns") or []
+        worker_patterns = env.get("worker_patterns") or []
+
+        if queue_patterns:
+            event_queue = getattr(event, "queue", None) or ""
+            if not any(fnmatch.fnmatch(event_queue, p) for p in queue_patterns):
+                return False
+
+        if worker_patterns:
+            event_hostname = getattr(event, "hostname", None) or ""
+            if not any(fnmatch.fnmatch(event_hostname, p) for p in worker_patterns):
+                return False
+
+        return True
 
     async def send_personal_message(self, message: str, websocket: WebSocket):
         try:

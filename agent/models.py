@@ -570,6 +570,7 @@ class SubscribeMessage(BaseModel):
 
     type: Literal["subscribe"] = "subscribe"
     filters: dict[str, list[str]] | None = Field(default_factory=dict)
+    environment_id: str | None = None
 
 
 class SetModeMessage(BaseModel):

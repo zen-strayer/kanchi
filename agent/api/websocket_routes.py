@@ -62,9 +62,6 @@ async def _handle_get_stored_impl(app_state, websocket: WebSocket, message: dict
         from services import TaskService
 
         with app_state.db_manager.get_session() as session:
-            # NOTE: WebSocket connections don't have session ID in the handshake
-            # Environment filtering is handled on the client side via useEnvironmentMatcher
-            # The backend sends all events and the frontend filters them
             task_service = TaskService(session, active_env=None)
             recent_data = task_service.get_recent_events(limit=limit, page=0)
             for event_data in recent_data["data"]:
@@ -170,7 +167,25 @@ def create_router(app_state) -> APIRouter:  # noqa: C901
 
                     elif message.get("type") == "subscribe":
                         filters = message.get("filters", {})
+                        environment_id = message.get("environment_id")
+
                         app_state.connection_manager.set_client_filters(websocket, filters)
+
+                        if environment_id and app_state.db_manager:
+                            from database import EnvironmentDB
+
+                            with app_state.db_manager.get_session() as session:
+                                env_db = (
+                                    session.query(EnvironmentDB).filter_by(id=environment_id, is_active=True).first()
+                                )
+                                if env_db:
+                                    app_state.connection_manager.set_client_environment(
+                                        websocket,
+                                        queue_patterns=env_db.queue_patterns or [],
+                                        worker_patterns=env_db.worker_patterns or [],
+                                    )
+                                else:
+                                    app_state.connection_manager.set_client_environment(websocket, [], [])
 
                         response = SubscriptionResponse(
                             status="acknowledged", filters=filters, timestamp=datetime.now(UTC)
@@ -199,9 +214,6 @@ def create_router(app_state) -> APIRouter:  # noqa: C901
             from services import TaskService
 
             with app_state.db_manager.get_session() as session:
-                # NOTE: WebSocket connections don't have session ID in the handshake
-                # Environment filtering is handled on the client side via useEnvironmentMatcher
-                # The backend sends all events and the frontend filters them
                 task_service = TaskService(session, active_env=None)
                 recent_data = task_service.get_recent_events(limit=100, page=0)
                 for event_data in recent_data["data"]:
