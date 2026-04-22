@@ -34,7 +34,6 @@ class TestConfigBrokerValidation(unittest.TestCase):
 
     def test_broker_url_type_annotation_allows_none_before_post_init(self):
         """The field type should be str | None so the dataclass field accepts None before validation."""
-        import inspect
         hints = {}
         for cls in Config.__mro__:
             if hasattr(cls, "__annotations__"):
