@@ -75,6 +75,8 @@ class TestOrphanSleepSessionOrdering(unittest.TestCase):
 
         def fake_mark(hostname, orphaned_at, grace_period_seconds=2):
             orphan_call_order.append("orphan_mark")
+            self.assertEqual(session_context_active, [],
+                "Session must already be closed when orphan marking starts")
 
         handler._mark_tasks_as_orphaned = fake_mark
 
