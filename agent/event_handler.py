@@ -52,7 +52,7 @@ class EventHandler:
                 self.workflow_engine.process_event(task_event)
 
         except Exception as e:
-            logger.error(f"Error handling task event {task_event.task_id}: {e}", exc_info=True)
+            logger.error("Error handling task event %s: %s", task_event.task_id, e, exc_info=True)
 
     def handle_progress_event(self, progress_event):
         try:
@@ -65,7 +65,7 @@ class EventHandler:
             if self.workflow_engine:
                 self.workflow_engine.process_event(progress_event)
         except Exception as exc:
-            logger.error(f"Error handling progress event {progress_event.task_id}: {exc}", exc_info=True)
+            logger.error("Error handling progress event %s: %s", progress_event.task_id, exc, exc_info=True)
 
     def handle_steps_event(self, steps_event):
         try:
@@ -78,7 +78,7 @@ class EventHandler:
             if self.workflow_engine:
                 self.workflow_engine.process_event(steps_event)
         except Exception as exc:
-            logger.error(f"Error handling steps event {steps_event.task_id}: {exc}", exc_info=True)
+            logger.error("Error handling steps event %s: %s", steps_event.task_id, exc, exc_info=True)
 
     def handle_worker_event(self, worker_event: WorkerEvent):
         try:
@@ -92,7 +92,7 @@ class EventHandler:
                 )
 
             if worker_event.event_type == EventType.WORKER_OFFLINE.value:
-                logger.info(f"Worker {worker_event.hostname} went offline, marking tasks as orphaned")
+                logger.info("Worker %s went offline, marking tasks as orphaned", worker_event.hostname)
                 orphaned_at = datetime.now(UTC)
                 self._mark_tasks_as_orphaned(worker_event.hostname, orphaned_at)
 
@@ -102,7 +102,7 @@ class EventHandler:
                 self.workflow_engine.process_event(worker_event)
 
         except Exception as e:
-            logger.error(f"Error handling worker event {worker_event.hostname}: {e}", exc_info=True)
+            logger.error("Error handling worker event %s: %s", worker_event.hostname, e, exc_info=True)
 
     def _mark_tasks_as_orphaned(self, hostname: str, orphaned_at: datetime, grace_period_seconds: int = 2):
         try:
@@ -119,4 +119,4 @@ class EventHandler:
                     orphan_service.broadcast_orphan_events(orphaned_tasks, orphaned_at, self.connection_manager)
 
         except Exception as e:
-            logger.error(f"Error marking tasks as orphaned for worker {hostname}: {e}", exc_info=True)
+            logger.error("Error marking tasks as orphaned for worker %s: %s", hostname, e, exc_info=True)

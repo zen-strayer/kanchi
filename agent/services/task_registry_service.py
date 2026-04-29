@@ -40,9 +40,9 @@ class TaskRegistryService:
         try:
             task_names = self.session.query(TaskRegistryDB.name).all()
             TaskRegistryService._cache = {name[0] for name in task_names}
-            logger.info(f"Task registry cache initialized with {len(TaskRegistryService._cache)} tasks")
+            logger.info("Task registry cache initialized with %s tasks", len(TaskRegistryService._cache))
         except Exception as e:
-            logger.error(f"Error loading task registry cache: {e}", exc_info=True)
+            logger.error("Error loading task registry cache: %s", e, exc_info=True)
             TaskRegistryService._cache = set()
 
     def ensure_task_registered(self, task_name: str) -> TaskRegistryDB:
@@ -64,7 +64,7 @@ class TaskRegistryService:
             try:
                 self._update_last_seen(task_name)
             except Exception as e:
-                logger.warning(f"Failed to update last_seen for {task_name}: {e}")
+                logger.warning("Failed to update last_seen for %s: %s", task_name, e)
             return None
 
         existing_task = self.session.query(TaskRegistryDB).filter(TaskRegistryDB.name == task_name).first()
@@ -73,13 +73,13 @@ class TaskRegistryService:
             with TaskRegistryService._cache_lock:
                 TaskRegistryService._cache.add(task_name)
             self._update_last_seen(task_name)
-            logger.info(f"Task '{task_name}' found in DB, added to cache")
+            logger.info("Task '%s' found in DB, added to cache", task_name)
             return existing_task
 
         new_task = self._register_new_task(task_name)
         with TaskRegistryService._cache_lock:
             TaskRegistryService._cache.add(task_name)
-        logger.info(f"Auto-discovered new task: '{task_name}'")
+        logger.info("Auto-discovered new task: '%s'", task_name)
         return new_task
 
     def list_tasks(self, tag: str | None = None, name_filter: str | None = None) -> list[TaskRegistryResponse]:
@@ -156,7 +156,7 @@ class TaskRegistryService:
 
         except Exception as e:
             self.session.rollback()
-            logger.error(f"Failed to update task {task_name}: {e}")
+            logger.error("Failed to update task %s: %s", task_name, e)
             raise
 
     def get_task_stats(self, task_name: str, hours: int = 24) -> TaskRegistryStats:
@@ -329,7 +329,10 @@ class TaskRegistryService:
 
         non_empty_buckets = [b for b in timeline_buckets if b.total_executions > 0]
         logger.info(
-            f"Timeline for {task_name}: Returning {len(non_empty_buckets)}/{len(timeline_buckets)} non-empty buckets"
+            "Timeline for %s: Returning %s/%s non-empty buckets",
+            task_name,
+            len(non_empty_buckets),
+            len(timeline_buckets),
         )
 
         return TaskTimelineResponse(
@@ -370,7 +373,7 @@ class TaskRegistryService:
 
         except Exception as e:
             self.session.rollback()
-            logger.error(f"Failed to register new task {task_name}: {e}")
+            logger.error("Failed to register new task %s: %s", task_name, e)
             raise
 
     def _update_last_seen(self, task_name: str):
@@ -388,5 +391,5 @@ class TaskRegistryService:
             )
             self.session.commit()
         except Exception as e:
-            logger.error(f"Error updating last_seen for task '{task_name}': {e}")
+            logger.error("Error updating last_seen for task '%s': %s", task_name, e)
             self.session.rollback()

@@ -125,7 +125,7 @@ class RetryActionHandler(ActionHandler):
             )
 
         except Exception as e:
-            logger.error(f"Task retry failed: {e}", exc_info=True)
+            logger.error("Task retry failed: %s", e, exc_info=True)
             duration = int((datetime.now() - start_time).total_seconds() * 1000)
             return ActionResult(action_type="task.retry", status="failed", error_message=str(e), duration_ms=duration)
 
@@ -241,5 +241,5 @@ class RetryActionHandler(ActionHandler):
             return retry_depth
 
         except Exception as e:
-            logger.warning(f"Error counting workflow retries: {e}")
+            logger.warning("Error counting workflow retries: %s", e)
             return 0

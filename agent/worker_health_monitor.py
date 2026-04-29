@@ -36,8 +36,10 @@ class WorkerHealthMonitor:
         self.thread = threading.Thread(target=self._run_monitor, daemon=True)
         self.thread.start()
         logger.info(
-            f"Worker health monitor started (timeout: {self.worker_timeout}s, "
-            f"interval: {self.check_interval}s, grace period: {self.orphan_grace_period}s)"
+            "Worker health monitor started (timeout: %ss, interval: %ss, grace period: %ss)",
+            self.worker_timeout,
+            self.check_interval,
+            self.orphan_grace_period,
         )
 
     def stop(self):
@@ -54,7 +56,7 @@ class WorkerHealthMonitor:
                 self._check_worker_health()
                 time.sleep(self.check_interval)
             except Exception as e:
-                logger.error(f"Error in worker health monitor: {e}", exc_info=True)
+                logger.error("Error in worker health monitor: %s", e, exc_info=True)
                 time.sleep(self.check_interval)
 
     def _check_worker_health(self):
@@ -71,14 +73,14 @@ class WorkerHealthMonitor:
 
             if last_seen and isinstance(last_seen, datetime):
                 if last_seen < timeout_threshold and current_status == "online":
-                    logger.warning(f"Worker {hostname} appears offline (last seen: {last_seen})")
+                    logger.warning("Worker %s appears offline (last seen: %s)", hostname, last_seen)
 
                     workers[hostname]["status"] = "offline"
                     offline_workers.append(hostname)
                     self._mark_worker_tasks_as_orphaned(hostname, current_time)
 
         if offline_workers:
-            logger.info(f"Marked {len(offline_workers)} workers as offline: {offline_workers}")
+            logger.info("Marked %s workers as offline: %s", len(offline_workers), offline_workers)
 
     def _mark_worker_tasks_as_orphaned(self, hostname: str, orphaned_at: datetime):
         """
@@ -107,4 +109,4 @@ class WorkerHealthMonitor:
                     )
 
         except Exception as e:
-            logger.error(f"Error marking tasks as orphaned for worker {hostname}: {e}", exc_info=True)
+            logger.error("Error marking tasks as orphaned for worker %s: %s", hostname, e, exc_info=True)

@@ -85,13 +85,13 @@ class CeleryEventMonitor:
 
             task_event = TaskEvent.from_celery_event(event, task_name)
 
-            logger.debug(f"Task {event_type}: {task_name}[{task_id}]")
+            logger.debug("Task %s: %s[%s]", event_type, task_name, task_id)
 
             if self.task_callback:
                 self.task_callback(task_event)
 
         except Exception as e:
-            logger.error(f"Error handling task event: {e}", exc_info=True)
+            logger.error("Error handling task event: %s", e, exc_info=True)
 
     def _handle_progress_event(self, event: dict[str, Any]):
         """Handle custom task progress events."""
@@ -100,7 +100,7 @@ class CeleryEventMonitor:
             if self.progress_callback:
                 self.progress_callback(progress_event)
         except Exception as exc:
-            logger.error(f"Error handling progress event: {exc}", exc_info=True)
+            logger.error("Error handling progress event: %s", exc, exc_info=True)
 
     def _handle_steps_event(self, event: dict[str, Any]):
         """Handle custom task steps events."""
@@ -120,7 +120,7 @@ class CeleryEventMonitor:
             if self.steps_callback:
                 self.steps_callback(steps_event)
         except Exception as exc:
-            logger.error(f"Error handling steps event: {exc}", exc_info=True)
+            logger.error("Error handling steps event: %s", exc, exc_info=True)
 
     def _handle_worker_event(self, event: dict[str, Any], event_type: str):
         """Handle worker events."""
@@ -141,11 +141,11 @@ class CeleryEventMonitor:
                         "sw_sys": event.get("sw_sys"),
                     }
                 )
-                logger.info(f"Worker online: {hostname}")
+                logger.info("Worker online: %s", hostname)
 
             elif event_type == EventType.WORKER_OFFLINE.value:
                 self.workers[hostname].update({"status": "offline", "timestamp": timestamp})
-                logger.warning(f"Worker offline: {hostname}")
+                logger.warning("Worker offline: %s", hostname)
 
             elif event_type == EventType.WORKER_HEARTBEAT.value:
                 self.workers[hostname].update(
@@ -159,14 +159,14 @@ class CeleryEventMonitor:
                         "freq": event.get("freq"),
                     }
                 )
-                logger.debug(f"Worker heartbeat: {hostname} - Active: {event.get('active', 0)}")
+                logger.debug("Worker heartbeat: %s - Active: %s", hostname, event.get("active", 0))
 
             if self.worker_callback:
                 worker_event = WorkerEvent.from_celery_event(event)
                 self.worker_callback(worker_event)
 
         except Exception as e:
-            logger.error(f"Error handling worker event: {e}", exc_info=True)
+            logger.error("Error handling worker event: %s", e, exc_info=True)
 
     def get_workers_info(self) -> dict[str, dict[str, Any]]:
         """Get current worker states."""
@@ -187,6 +187,7 @@ class CeleryEventMonitor:
                 EventType.TASK_FAILED.value: self._handle_task_event,
                 EventType.TASK_RETRIED.value: self._handle_task_event,
                 EventType.TASK_REVOKED.value: self._handle_task_event,
+                EventType.TASK_REJECTED.value: self._handle_task_event,
                 EventType.WORKER_ONLINE.value: lambda event: self._handle_worker_event(
                     event, EventType.WORKER_ONLINE.value
                 ),

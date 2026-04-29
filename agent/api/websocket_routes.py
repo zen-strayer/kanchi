@@ -258,7 +258,7 @@ def create_router(app_state) -> APIRouter:  # noqa: C901
                         await handle_get_stored(websocket, message)
 
                 except json.JSONDecodeError:
-                    logger.error(f"Invalid JSON received: {data}")
+                    logger.error("Invalid JSON received: %s", data)
 
         except WebSocketDisconnect:
             app_state.connection_manager.disconnect(websocket)

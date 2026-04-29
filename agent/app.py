@@ -241,7 +241,7 @@ async def initialize_application():
         logging.basicConfig(level=getattr(logging, config.log_level), format=config.log_format)
 
     app_state.db_manager = DatabaseManager(config.database_url)
-    logger.info(f"Running database migrations for: {mask_sensitive_url(config.database_url)}")
+    logger.info("Running database migrations for: %s", mask_sensitive_url(config.database_url))
     app_state.db_manager.run_migrations()
     logger.info("Database migrations completed")
 
@@ -300,7 +300,7 @@ def start_monitor(config: Config):
         logger.warning("Monitor already running")
         return
 
-    logger.info(f"Starting Celery monitor with broker: {mask_sensitive_url(config.broker_url)}")
+    logger.info("Starting Celery monitor with broker: %s", mask_sensitive_url(config.broker_url))
     app_state.monitor_instance = CeleryEventMonitor(
         broker_url=config.broker_url,
         allow_pickle_serialization=config.enable_pickle_serialization,

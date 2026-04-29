@@ -43,7 +43,7 @@ class TestWorkflowCircuitBreaker(DatabaseTestCase):
             enabled=True, max_executions=3, window_seconds=300, context_field="root_id"
         )
 
-        workflow = self._create_test_workflow(circuit_breaker_config=circuit_breaker.dict())
+        workflow = self._create_test_workflow(circuit_breaker_config=circuit_breaker.model_dump())
 
         root_id = str(uuid.uuid4())
         context = {"root_id": root_id, "task_id": str(uuid.uuid4())}
@@ -75,7 +75,7 @@ class TestWorkflowCircuitBreaker(DatabaseTestCase):
             enabled=True, max_executions=5, window_seconds=300, context_field="root_id"
         )
 
-        workflow = self._create_test_workflow(circuit_breaker_config=circuit_breaker.dict())
+        workflow = self._create_test_workflow(circuit_breaker_config=circuit_breaker.model_dump())
 
         root_id = str(uuid.uuid4())
         context = {"root_id": root_id, "task_id": str(uuid.uuid4())}
@@ -104,7 +104,7 @@ class TestWorkflowCircuitBreaker(DatabaseTestCase):
             enabled=True, max_executions=3, window_seconds=300, context_field="root_id"
         )
 
-        workflow = self._create_test_workflow(circuit_breaker_config=circuit_breaker.dict())
+        workflow = self._create_test_workflow(circuit_breaker_config=circuit_breaker.model_dump())
 
         root_id = str(uuid.uuid4())
         context = {"root_id": root_id, "task_id": str(uuid.uuid4())}
@@ -131,7 +131,7 @@ class TestWorkflowCircuitBreaker(DatabaseTestCase):
         """Test that disabled circuit breaker always allows execution."""
         circuit_breaker = CircuitBreakerConfig(enabled=False, max_executions=1, window_seconds=300)
 
-        workflow = self._create_test_workflow(circuit_breaker_config=circuit_breaker.dict())
+        workflow = self._create_test_workflow(circuit_breaker_config=circuit_breaker.model_dump())
 
         root_id = str(uuid.uuid4())
         context = {"root_id": root_id, "task_id": str(uuid.uuid4())}
@@ -159,7 +159,7 @@ class TestWorkflowCircuitBreaker(DatabaseTestCase):
             enabled=True, max_executions=2, window_seconds=300, context_field="custom_field"
         )
 
-        workflow = self._create_test_workflow(circuit_breaker_config=circuit_breaker.dict())
+        workflow = self._create_test_workflow(circuit_breaker_config=circuit_breaker.model_dump())
 
         task_id = str(uuid.uuid4())
         context = {"task_id": task_id}
@@ -175,7 +175,7 @@ class TestWorkflowCircuitBreaker(DatabaseTestCase):
             enabled=True, max_executions=2, window_seconds=300, context_field="root_id"
         )
 
-        workflow = self._create_test_workflow(circuit_breaker_config=circuit_breaker.dict())
+        workflow = self._create_test_workflow(circuit_breaker_config=circuit_breaker.model_dump())
 
         root_id_1 = str(uuid.uuid4())
         root_id_2 = str(uuid.uuid4())
@@ -215,7 +215,7 @@ class TestWorkflowCircuitBreaker(DatabaseTestCase):
             enabled=True, max_executions=1, window_seconds=300, context_field="root_id"
         )
 
-        workflow = self._create_test_workflow(circuit_breaker_config=circuit_breaker.dict())
+        workflow = self._create_test_workflow(circuit_breaker_config=circuit_breaker.model_dump())
 
         root_id = str(uuid.uuid4())
         context = {"root_id": root_id, "task_id": str(uuid.uuid4())}
@@ -224,7 +224,7 @@ class TestWorkflowCircuitBreaker(DatabaseTestCase):
             workflow=workflow,
             trigger_type="task.failed",
             trigger_event=context,
-            workflow_snapshot=workflow.dict(),
+            workflow_snapshot=workflow.model_dump(),
             circuit_breaker_key=root_id,
             reason="Circuit breaker test",
         )

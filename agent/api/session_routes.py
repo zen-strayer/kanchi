@@ -57,7 +57,7 @@ def create_router(app_state) -> APIRouter:  # noqa: C901
                 auth_provider=auth_provider,
             )
         except Exception as e:
-            logger.error(f"Error initializing session: {e}", exc_info=True)
+            logger.error("Error initializing session: %s", e, exc_info=True)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @router.get("/me", response_model=UserSessionResponse)
@@ -85,7 +85,7 @@ def create_router(app_state) -> APIRouter:  # noqa: C901
         except PermissionError as exc:
             raise HTTPException(status_code=403, detail=str(exc)) from exc
         except Exception as e:
-            logger.error(f"Error getting session: {e}", exc_info=True)
+            logger.error("Error getting session: %s", e, exc_info=True)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @router.patch("/me", response_model=UserSessionResponse)
@@ -114,7 +114,7 @@ def create_router(app_state) -> APIRouter:  # noqa: C901
         except PermissionError as exc:
             raise HTTPException(status_code=403, detail=str(exc)) from exc
         except Exception as e:
-            logger.error(f"Error updating session: {e}", exc_info=True)
+            logger.error("Error updating session: %s", e, exc_info=True)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @router.post("/me/environment/{environment_id}", response_model=UserSessionResponse)
@@ -143,7 +143,7 @@ def create_router(app_state) -> APIRouter:  # noqa: C901
         except PermissionError as exc:
             raise HTTPException(status_code=403, detail=str(exc)) from exc
         except Exception as e:
-            logger.error(f"Error setting environment: {e}", exc_info=True)
+            logger.error("Error setting environment: %s", e, exc_info=True)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @router.delete("/me/environment", response_model=UserSessionResponse)
@@ -171,7 +171,7 @@ def create_router(app_state) -> APIRouter:  # noqa: C901
         except PermissionError as exc:
             raise HTTPException(status_code=403, detail=str(exc)) from exc
         except Exception as e:
-            logger.error(f"Error clearing environment: {e}", exc_info=True)
+            logger.error("Error clearing environment: %s", e, exc_info=True)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     return router

@@ -37,7 +37,7 @@ class ActionConfigService:
         self.session.add(config_db)
         self.session.commit()
 
-        logger.info(f"Created action config: {config_data.name} (type={config_data.action_type})")
+        logger.info("Created action config: %s (type=%s)", config_data.name, config_data.action_type)
 
         return self._db_to_config(config_db)
 
@@ -84,7 +84,7 @@ class ActionConfigService:
         config_db.updated_at = datetime.now(UTC)
         self.session.commit()
 
-        logger.info(f"Updated action config: {config_id}")
+        logger.info("Updated action config: %s", config_id)
 
         return self._db_to_config(config_db)
 
@@ -98,7 +98,7 @@ class ActionConfigService:
         self.session.delete(config_db)
         self.session.commit()
 
-        logger.info(f"Deleted action config: {config_id}")
+        logger.info("Deleted action config: %s", config_id)
         return True
 
     def increment_usage(self, config_id: str):

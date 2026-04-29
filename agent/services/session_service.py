@@ -35,7 +35,7 @@ class SessionService:
             session_db.last_active = datetime.now(UTC)
             self.session.commit()
             self.session.refresh(session_db)
-            logger.debug(f"Retrieved existing session: {session_id}")
+            logger.debug("Retrieved existing session: %s", session_id)
         else:
             session_db = UserSessionDB(
                 session_id=session_id,
@@ -49,7 +49,7 @@ class SessionService:
             self.session.add(session_db)
             self.session.commit()
             self.session.refresh(session_db)
-            logger.info(f"Created new session: {session_id}")
+            logger.info("Created new session: %s", session_id)
 
         return UserSessionResponse.model_validate(session_db)
 
@@ -95,7 +95,7 @@ class SessionService:
         self.session.commit()
         self.session.refresh(session_db)
 
-        logger.info(f"Updated session: {session_id}")
+        logger.info("Updated session: %s", session_id)
         return UserSessionResponse.model_validate(session_db)
 
     def set_active_environment(
@@ -119,7 +119,7 @@ class SessionService:
         self.session.commit()
         self.session.refresh(session_db)
 
-        logger.info(f"Set active environment for session {session_id}: {environment_id}")
+        logger.info("Set active environment for session %s: %s", session_id, environment_id)
         return UserSessionResponse.model_validate(session_db)
 
     def get_active_environment_id(self, session_id: str, *, user_id: str | None = None) -> str | None:
@@ -143,7 +143,7 @@ class SessionService:
         self.session.commit()
 
         if deleted_count > 0:
-            logger.info(f"Cleaned up {deleted_count} inactive sessions")
+            logger.info("Cleaned up %s inactive sessions", deleted_count)
 
         return deleted_count
 
@@ -159,7 +159,7 @@ class SessionService:
         self.session.delete(session_db)
         self.session.commit()
 
-        logger.info(f"Deleted session: {session_id}")
+        logger.info("Deleted session: %s", session_id)
         return True
 
     def _ensure_session_owner(
