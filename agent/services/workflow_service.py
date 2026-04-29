@@ -96,16 +96,10 @@ class WorkflowService:
         if isinstance(value, (list, tuple, set)):
             return [self._json_safe(item) for item in value]
 
-        # Support Pydantic v1 (`dict`) and v2 (`model_dump`)
+        # Support Pydantic v2 (`model_dump`)
         if hasattr(value, "model_dump"):
             try:
                 return self._json_safe(value.model_dump())
-            except Exception:
-                pass
-
-        if hasattr(value, "dict") and callable(value.dict):
-            try:
-                return self._json_safe(value.dict())
             except Exception:
                 pass
 
@@ -238,12 +232,12 @@ class WorkflowService:
             enabled=workflow_data.enabled,
             trigger_type=workflow_data.trigger.type,
             trigger_config=workflow_data.trigger.config,
-            conditions=workflow_data.conditions.dict() if workflow_data.conditions else None,
-            actions=[action.dict() for action in actions],
+            conditions=workflow_data.conditions.model_dump() if workflow_data.conditions else None,
+            actions=[action.model_dump() for action in actions],
             priority=workflow_data.priority,
             max_executions_per_hour=workflow_data.max_executions_per_hour,
             cooldown_seconds=workflow_data.cooldown_seconds,
-            circuit_breaker_config=workflow_data.circuit_breaker.dict() if workflow_data.circuit_breaker else None,
+            circuit_breaker_config=workflow_data.circuit_breaker.model_dump() if workflow_data.circuit_breaker else None,
         )
 
         self.session.add(workflow_db)
@@ -284,7 +278,7 @@ class WorkflowService:
             return None
 
         # Apply updates
-        update_dict = updates.dict(exclude_unset=True)
+        update_dict = updates.model_dump(exclude_unset=True)
 
         for field, value in update_dict.items():
             if field == "trigger" and value is not None:
@@ -293,12 +287,12 @@ class WorkflowService:
             elif field == "conditions" and value is not None:
                 workflow_db.conditions = value
             elif field == "actions" and value is not None:
-                workflow_db.actions = [action.dict() if hasattr(action, "dict") else action for action in value]
+                workflow_db.actions = [action.model_dump() if hasattr(action, "model_dump") else action for action in value]
             elif field == "circuit_breaker":
                 if value is None:
                     workflow_db.circuit_breaker_config = None
-                elif hasattr(value, "dict"):
-                    workflow_db.circuit_breaker_config = value.dict()
+                elif hasattr(value, "model_dump"):
+                    workflow_db.circuit_breaker_config = value.model_dump()
                 else:
                     workflow_db.circuit_breaker_config = value
             elif hasattr(workflow_db, field):

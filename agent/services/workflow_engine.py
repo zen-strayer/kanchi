@@ -91,7 +91,7 @@ class WorkflowEngine:
                             workflow=workflow,
                             trigger_type=trigger_type,
                             trigger_event=context,
-                            workflow_snapshot=workflow.dict(),
+                            workflow_snapshot=workflow.model_dump(),
                             circuit_breaker_key=cb_state.key,
                             reason=cb_state.reason,
                         )
