@@ -23,6 +23,7 @@ class TestTaskRejectedConstants(unittest.TestCase):
         import inspect
 
         from monitor import CeleryEventMonitor
+
         src = inspect.getsource(CeleryEventMonitor._run_once)
         self.assertIn("TASK_REJECTED", src)
 
@@ -31,6 +32,7 @@ class TestTaskRejectedConstants(unittest.TestCase):
         import inspect
 
         from services.task_service import TaskService
+
         src = inspect.getsource(TaskService.get_unretried_orphaned_tasks)
         # The enum value produces "task-rejected" but via EventType, not a bare quoted literal
         self.assertNotIn('"task-rejected"', src)

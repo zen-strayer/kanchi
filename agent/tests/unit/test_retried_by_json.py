@@ -46,5 +46,6 @@ class TestRetriedByJson(DatabaseTestCase):
 
         events = self.session.query(TaskEventDB).filter_by(task_id="original").all()
         for ev in events:
-            self.assertIsInstance(ev.retried_by, list,
-                msg=f"retried_by should be list, got {type(ev.retried_by)}: {ev.retried_by!r}")
+            self.assertIsInstance(
+                ev.retried_by, list, msg=f"retried_by should be list, got {type(ev.retried_by)}: {ev.retried_by!r}"
+            )

@@ -237,7 +237,9 @@ class WorkflowService:
             priority=workflow_data.priority,
             max_executions_per_hour=workflow_data.max_executions_per_hour,
             cooldown_seconds=workflow_data.cooldown_seconds,
-            circuit_breaker_config=workflow_data.circuit_breaker.model_dump() if workflow_data.circuit_breaker else None,
+            circuit_breaker_config=workflow_data.circuit_breaker.model_dump()
+            if workflow_data.circuit_breaker
+            else None,
         )
 
         self.session.add(workflow_db)
@@ -287,7 +289,9 @@ class WorkflowService:
             elif field == "conditions" and value is not None:
                 workflow_db.conditions = value
             elif field == "actions" and value is not None:
-                workflow_db.actions = [action.model_dump() if hasattr(action, "model_dump") else action for action in value]
+                workflow_db.actions = [
+                    action.model_dump() if hasattr(action, "model_dump") else action for action in value
+                ]
             elif field == "circuit_breaker":
                 if value is None:
                     workflow_db.circuit_breaker_config = None
