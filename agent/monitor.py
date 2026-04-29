@@ -187,6 +187,7 @@ class CeleryEventMonitor:
                 EventType.TASK_FAILED.value: self._handle_task_event,
                 EventType.TASK_RETRIED.value: self._handle_task_event,
                 EventType.TASK_REVOKED.value: self._handle_task_event,
+                EventType.TASK_REJECTED.value: self._handle_task_event,
                 EventType.WORKER_ONLINE.value: lambda event: self._handle_worker_event(
                     event, EventType.WORKER_ONLINE.value
                 ),

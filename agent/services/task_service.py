@@ -232,11 +232,11 @@ class TaskService:
     def get_unretried_orphaned_tasks(self) -> list[TaskEvent]:
         """Get orphaned tasks that have not been retried and have no final-state event."""
         FINAL_STATES = {
-            "task-succeeded",
-            "task-failed",
-            "task-revoked",
-            "task-rejected",
-            "task-retried",
+            EventType.TASK_SUCCEEDED.value,
+            EventType.TASK_FAILED.value,
+            EventType.TASK_REVOKED.value,
+            EventType.TASK_REJECTED.value,
+            EventType.TASK_RETRIED.value,
         }
 
         # Latest orphaned event per task (same subquery as before, now in service)
