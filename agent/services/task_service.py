@@ -403,10 +403,10 @@ class TaskService:
             original_events = self.session.query(TaskEventDB).filter_by(task_id=original_task_id).all()
 
             for event in original_events:
-                existing_retries = json.loads(event.retried_by) if event.retried_by else []
+                existing_retries = list(event.retried_by) if event.retried_by else []
                 existing_retries.append(new_task_id)
 
-                event.retried_by = json.dumps(existing_retries)
+                event.retried_by = existing_retries
                 event.has_retries = True
                 event.retry_count = len(existing_retries)
 
@@ -628,7 +628,7 @@ class TaskService:
             exception=task_event.exception,
             traceback=task_event.traceback,
             retry_of=task_event.retry_of.task_id if task_event.retry_of else None,
-            retried_by=(json.dumps([t.task_id for t in task_event.retried_by]) if task_event.retried_by else None),
+            retried_by=([t.task_id for t in task_event.retried_by] if task_event.retried_by else None),
             is_retry=task_event.is_retry,
             has_retries=task_event.has_retries,
             retry_count=task_event.retry_count,

@@ -1,6 +1,5 @@
 """Database models and session management for Kanchi."""
 
-import json
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from typing import Any
@@ -77,7 +76,7 @@ class TaskEventDB(Base):
     traceback = Column(Text)
 
     retry_of = Column(String(255), index=True)
-    retried_by = Column(Text)  # JSON serialized list
+    retried_by = Column(JSON)
     is_retry = Column(Boolean, default=False)
     has_retries = Column(Boolean, default=False)
     retry_count = Column(Integer, default=0)
@@ -122,7 +121,7 @@ class TaskEventDB(Base):
             "exception": self.exception,
             "traceback": self.traceback,
             "retry_of": self.retry_of,
-            "retried_by": json.loads(self.retried_by) if self.retried_by else [],
+            "retried_by": self.retried_by or [],
             "is_retry": self.is_retry,
             "has_retries": self.has_retries,
             "retry_count": self.retry_count,
@@ -245,7 +244,7 @@ class TaskLatestDB(Base):
     traceback = Column(Text)
 
     retry_of = Column(String(255), index=True)
-    retried_by = Column(Text)  # JSON serialized list of task IDs
+    retried_by = Column(JSON)
     is_retry = Column(Boolean, default=False)
     has_retries = Column(Boolean, default=False)
     retry_count = Column(Integer, default=0)
