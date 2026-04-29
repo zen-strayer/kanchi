@@ -1,5 +1,6 @@
 """WebSocket routes and related endpoints."""
 
+import asyncio
 import json
 import logging
 from datetime import UTC, datetime
@@ -149,19 +150,43 @@ def create_router(app_state) -> APIRouter:  # noqa: C901
             await websocket.close(code=1011, reason="Server not initialized")
             return
 
+        already_accepted = False
         if config.auth_enabled:
-            token = websocket.query_params.get("token")
-            if not token:
-                auth_header = websocket.headers.get("Authorization")
-                if auth_header and auth_header.startswith("Bearer "):
-                    token = auth_header[len("Bearer ") :].strip()
-            if not token:
-                await websocket.close(code=4401, reason="Authentication required")
-                return
-
             if not app_state.auth_manager or not app_state.db_manager:
                 await websocket.close(code=1011, reason="Authentication not initialized")
                 return
+
+            # Prefer token-in-message over query param (query param leaks into logs)
+            token = websocket.query_params.get("token")
+            if token:
+                logger.warning(
+                    "WebSocket token passed as query param — this leaks into server logs. "
+                    'Send {"type":"auth","token":"..."} as the first message instead.'
+                )
+            else:
+                auth_header = websocket.headers.get("Authorization")
+                if auth_header and auth_header.startswith("Bearer "):
+                    token = auth_header[len("Bearer ") :].strip()
+
+            if not token:
+                # Accept connection first, then wait for auth message
+                await websocket.accept()
+                already_accepted = True
+                try:
+                    raw = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
+                    first_msg = json.loads(raw)
+                except TimeoutError:
+                    logger.warning("WS auth timeout for %s", websocket.client)
+                    await websocket.close(code=4401, reason="Unauthorized")
+                    return
+                except Exception as exc:
+                    logger.debug("WS auth: failed to parse first message: %s", exc)
+                    await websocket.close(code=4401, reason="Unauthorized")
+                    return
+                if not isinstance(first_msg, dict) or first_msg.get("type") != "auth" or not first_msg.get("token"):
+                    await websocket.close(code=4401, reason="Unauthorized")
+                    return
+                token = first_msg["token"]
 
             try:
                 with app_state.db_manager.get_session() as session:
@@ -173,7 +198,10 @@ def create_router(app_state) -> APIRouter:  # noqa: C901
                 await websocket.close(code=4401, reason="Unauthorized")
                 return
 
-        await app_state.connection_manager.connect(websocket)
+        if already_accepted:
+            app_state.connection_manager.register_accepted(websocket)
+        else:
+            await app_state.connection_manager.connect(websocket)
 
         welcome = ConnectionInfo(
             status="connected",

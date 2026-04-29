@@ -4,6 +4,7 @@ import logging
 import uuid
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import urlparse
 
 from sqlalchemy.orm import Session
 
@@ -118,7 +119,14 @@ class ActionConfigService:
             webhook_url = config.get("webhook_url", "")
             if isinstance(webhook_url, str):
                 webhook_url = webhook_url.strip()
-            return {"webhook_url": webhook_url} if webhook_url else {}
+            if not webhook_url:
+                return {}
+            parsed = urlparse(webhook_url)
+            if parsed.scheme != "https":
+                raise ValueError(f"Slack webhook URL must use HTTPS. Got scheme: '{parsed.scheme}'.")
+            if parsed.hostname != "hooks.slack.com":
+                raise ValueError(f"Slack webhook URL must point to hooks.slack.com. Got: '{parsed.hostname}'.")
+            return {"webhook_url": webhook_url}
 
         return dict(config)
 
