@@ -243,7 +243,7 @@ class WorkflowService:
         self.session.add(workflow_db)
         self.session.commit()
 
-        logger.info(f"Created workflow: {workflow_data.name} (id={workflow_id})")
+        logger.info("Created workflow: %s (id=%s)", workflow_data.name, workflow_id)
 
         return self._db_to_workflow(workflow_db)
 
@@ -305,7 +305,7 @@ class WorkflowService:
         workflow_db.updated_at = datetime.now(UTC)
         self.session.commit()
 
-        logger.info(f"Updated workflow: {workflow_id}")
+        logger.info("Updated workflow: %s", workflow_id)
 
         return self._db_to_workflow(workflow_db)
 
@@ -319,7 +319,7 @@ class WorkflowService:
         self.session.delete(workflow_db)
         self.session.commit()
 
-        logger.info(f"Deleted workflow: {workflow_id}")
+        logger.info("Deleted workflow: %s", workflow_id)
         return True
 
     # ==================== Workflow Execution Tracking ====================
@@ -412,7 +412,7 @@ class WorkflowService:
         execution_db = self.session.query(WorkflowExecutionDB).filter_by(id=execution_id).first()
 
         if not execution_db:
-            logger.error(f"Workflow execution not found: {execution_id}")
+            logger.error("Workflow execution not found: %s", execution_id)
             return
 
         execution_db.status = status

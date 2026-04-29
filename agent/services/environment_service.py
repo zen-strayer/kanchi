@@ -41,7 +41,7 @@ class EnvironmentService:
         self.session.commit()
         self.session.refresh(env_db)
 
-        logger.info(f"Created environment: {env_create.name}")
+        logger.info("Created environment: %s", env_create.name)
         return EnvironmentResponse.model_validate(env_db)
 
     def list_environments(self) -> list[EnvironmentResponse]:
@@ -81,7 +81,7 @@ class EnvironmentService:
         self.session.commit()
         self.session.refresh(env)
 
-        logger.info(f"Updated environment: {env.name}")
+        logger.info("Updated environment: %s", env.name)
         return EnvironmentResponse.model_validate(env)
 
     def delete_environment(self, env_id: str) -> bool:
@@ -93,7 +93,7 @@ class EnvironmentService:
         self.session.delete(env)
         self.session.commit()
 
-        logger.info(f"Deleted environment: {env.name}")
+        logger.info("Deleted environment: %s", env.name)
         return True
 
     def _unset_all_defaults(self):

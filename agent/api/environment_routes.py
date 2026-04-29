@@ -37,7 +37,7 @@ def create_router(app_state) -> APIRouter:  # noqa: C901
             service = EnvironmentService(session)
             return service.create_environment(env_create)
         except Exception as e:
-            logger.error(f"Error creating environment: {e}", exc_info=True)
+            logger.error("Error creating environment: %s", e, exc_info=True)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @router.get("", response_model=list[EnvironmentResponse])
@@ -47,7 +47,7 @@ def create_router(app_state) -> APIRouter:  # noqa: C901
             service = EnvironmentService(session)
             return service.list_environments()
         except Exception as e:
-            logger.error(f"Error listing environments: {e}", exc_info=True)
+            logger.error("Error listing environments: %s", e, exc_info=True)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @router.get("/{env_id}", response_model=EnvironmentResponse)
@@ -62,7 +62,7 @@ def create_router(app_state) -> APIRouter:  # noqa: C901
         except HTTPException:
             raise
         except Exception as e:
-            logger.error(f"Error getting environment: {e}", exc_info=True)
+            logger.error("Error getting environment: %s", e, exc_info=True)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @router.patch("/{env_id}", response_model=EnvironmentResponse)
@@ -77,7 +77,7 @@ def create_router(app_state) -> APIRouter:  # noqa: C901
         except HTTPException:
             raise
         except Exception as e:
-            logger.error(f"Error updating environment: {e}", exc_info=True)
+            logger.error("Error updating environment: %s", e, exc_info=True)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @router.delete("/{env_id}", status_code=204)
@@ -90,7 +90,7 @@ def create_router(app_state) -> APIRouter:  # noqa: C901
         except HTTPException:
             raise
         except Exception as e:
-            logger.error(f"Error deleting environment: {e}", exc_info=True)
+            logger.error("Error deleting environment: %s", e, exc_info=True)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     return router

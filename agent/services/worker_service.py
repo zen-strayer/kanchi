@@ -50,7 +50,7 @@ class WorkerService:
 
         except Exception as e:
             self.session.rollback()
-            logger.error(f"Failed to save worker event for {worker_event.hostname}: {e}")
+            logger.error("Failed to save worker event for %s: %s", worker_event.hostname, e)
             raise
 
     def get_recent_worker_events(self, limit: int = 50) -> list[dict[str, Any]]:

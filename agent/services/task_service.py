@@ -79,7 +79,7 @@ class TaskService:
 
         except Exception as e:
             self.session.rollback()
-            logger.error(f"Failed to save task event {task_event.task_id[:8]}: {e}")
+            logger.error("Failed to save task event %s: %s", task_event.task_id[:8], e)
             raise
 
     def get_task_events(self, task_id: str) -> list[TaskEvent]:
@@ -414,7 +414,7 @@ class TaskService:
 
         except Exception as e:
             self.session.rollback()
-            logger.error(f"Failed to create retry relationship: {e}")
+            logger.error("Failed to create retry relationship: %s", e)
             raise
 
     def mark_new_task_as_retry(self, new_task_id: str, original_task_id: str):
@@ -440,7 +440,7 @@ class TaskService:
 
         except Exception as e:
             self.session.rollback()
-            logger.error(f"Failed to mark task as retry: {e}")
+            logger.error("Failed to mark task as retry: %s", e)
             raise
 
     def get_task_summary_stats(self) -> dict[str, Any]:
@@ -1177,7 +1177,7 @@ class TaskService:
                 start_dt = parser.isoparse(start_time)
                 query = query.filter(timestamp_column >= start_dt)
             except (ValueError, ImportError) as e:
-                logger.error(f"Failed to parse start_time: {start_time}, error: {e}")
+                logger.error("Failed to parse start_time: %s, error: %s", start_time, e)
 
         if end_time:
             try:
@@ -1186,7 +1186,7 @@ class TaskService:
                 end_dt = parser.isoparse(end_time)
                 query = query.filter(timestamp_column <= end_dt)
             except (ValueError, ImportError) as e:
-                logger.error(f"Failed to parse end_time: {end_time}, error: {e}")
+                logger.error("Failed to parse end_time: %s, error: %s", end_time, e)
 
         return query
 

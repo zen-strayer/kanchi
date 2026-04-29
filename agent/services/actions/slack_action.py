@@ -86,7 +86,7 @@ class SlackActionHandler(ActionHandler):
             )
 
         except Exception as e:
-            logger.error(f"Slack notification failed: {e}", exc_info=True)
+            logger.error("Slack notification failed: %s", e, exc_info=True)
             duration = int((datetime.now() - start_time).total_seconds() * 1000)
             return ActionResult(action_type="slack.notify", status="failed", error_message=str(e), duration_ms=duration)
 

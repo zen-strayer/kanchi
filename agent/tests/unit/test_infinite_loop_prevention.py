@@ -87,7 +87,7 @@ class TestInfiniteLoopPrevention(DatabaseTestCase):
             enabled=True, max_executions=3, window_seconds=300, context_field="root_id"
         )
 
-        workflow = self._create_test_workflow(circuit_breaker_config=circuit_breaker.dict())
+        workflow = self._create_test_workflow(circuit_breaker_config=circuit_breaker.model_dump())
 
         root_id = str(uuid.uuid4())
 
@@ -122,7 +122,7 @@ class TestInfiniteLoopPrevention(DatabaseTestCase):
             enabled=True, max_executions=2, window_seconds=300, context_field="root_id"
         )
 
-        workflow = self._create_test_workflow(circuit_breaker_config=circuit_breaker.dict())
+        workflow = self._create_test_workflow(circuit_breaker_config=circuit_breaker.model_dump())
 
         root_id = str(uuid.uuid4())
         task_id = str(uuid.uuid4())
