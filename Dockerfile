@@ -1,4 +1,4 @@
-FROM node:20-alpine as frontend-builder
+FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS frontend-builder
 
 WORKDIR /app/frontend
 
@@ -9,7 +9,7 @@ COPY frontend/ .
 
 RUN npm run build
 
-FROM python:3.12-slim
+FROM python:3.12-slim@sha256:46cb7cc2877e60fbd5e21a9ae6115c30ace7a077b9f8772da879e4590c18c2e3
 
 RUN apt-get update && apt-get install -y \
     gcc \
