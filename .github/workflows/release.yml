@@ -18,6 +18,10 @@ on:
         type: boolean
         default: false
 
+permissions:
+  contents: write
+  packages: write
+
 concurrency:
   group: release
   cancel-in-progress: false
@@ -28,6 +32,8 @@ jobs:
     if: github.ref == 'refs/heads/main'
     permissions:
       contents: write
+    outputs:
+      version: ${{ steps.version.outputs.value }}
 
     steps:
       - name: Checkout repository
@@ -99,3 +105,10 @@ jobs:
             --title "v${{ steps.version.outputs.value }}" \
             --notes-file /tmp/release-body.md \
             "${ARGS[@]}"
+
+  publish:
+    needs: release
+    uses: ./.github/workflows/publish-docker.yml
+    with:
+      version: ${{ needs.release.outputs.version }}
+    secrets: inherit
