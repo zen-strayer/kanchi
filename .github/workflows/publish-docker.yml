@@ -42,6 +42,8 @@ jobs:
             exit 1
           fi
 
+      # image_tag direct interpolation below is safe — the validation step above
+      # has already rejected any value containing injection characters.
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
