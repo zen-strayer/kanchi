@@ -85,7 +85,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add CHANGELOG.md
           git commit -m "chore(release): v${{ steps.version.outputs.value }} [NOJIRA]"
-          git tag "v${{ steps.version.outputs.value }}"
+          git tag -a "v${{ steps.version.outputs.value }}" -m "Release v${{ steps.version.outputs.value }}"
           git push origin main --follow-tags
 
       - name: Create GitHub Release
