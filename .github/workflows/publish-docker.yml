@@ -5,6 +5,11 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Optional image tag override (e.g. "edge", "1.2.3"). Falls back to "latest" if omitted.'
+        required: false
+        type: string
 
 jobs:
   build-and-push:
@@ -37,6 +42,7 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
             type=raw,value=latest
+            type=raw,value=${{ inputs.image_tag }},enable=${{ inputs.image_tag != '' }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
