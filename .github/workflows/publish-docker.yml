@@ -85,8 +85,8 @@ jobs:
           platforms: ${{ matrix.platform }}
           outputs: type=image,name=ghcr.io/${{ github.repository }},push-by-digest=true,name-canonical=true,push=true
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=${{ env.PLATFORM_PAIR }}
-          cache-to: type=gha,mode=max,scope=${{ env.PLATFORM_PAIR }}
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}:cache-${{ env.PLATFORM_PAIR }}
+          cache-to: type=registry,ref=ghcr.io/${{ github.repository }}:cache-${{ env.PLATFORM_PAIR }},mode=max,image-manifest=true,oci-mediatypes=true
           build-args: |
             BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
             VCS_REF=${{ github.sha }}
