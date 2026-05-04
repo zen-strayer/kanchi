@@ -30,6 +30,7 @@
 
 - Retention pruning, WS env filtering, limit cap, sort_by whitelist (#6) ([`b2eaae0`](https://github.com/zen-strayer/kanchi/commit/b2eaae05a21e8986f2ad9258fe7dd8fd638bbef9))
 - Handle task-rejected events; add to COMPLETED_EVENT_TYPES ([`f2f735c`](https://github.com/zen-strayer/kanchi/commit/f2f735c974198d123013d7ba86211b2aebd9ece0))
+- Wire Docker publish into release workflow via workflow_call [NOJIRA] ([`ef24ca0`](https://github.com/zen-strayer/kanchi/commit/ef24ca09c5d1f1b01d56c9a0d00607aa7c902885))
 
 ## [1.3.8] - 2025-12-28
 
