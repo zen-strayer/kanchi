@@ -50,7 +50,7 @@ spec:
             secretKeyRef:
               key: BASIC_AUTH_PASSWORD
               name: kanchi-secret
-        image: getkanchi/kanchi:latest
+        image: ghcr.io/zen-strayer/kanchi:latest
         imagePullPolicy: Always
         livenessProbe:
           failureThreshold: 3
