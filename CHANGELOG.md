@@ -22,6 +22,8 @@
 - Rename _is_rate_limited to _is_allowed; prune stale IPs; use X-Forwarded-For for proxy awareness ([`603a713`](https://github.com/zen-strayer/kanchi/commit/603a713f6681802d25b37136c54788ec81d5c09d))
 - Metrics fails-closed when auth uninitialized; skip WS reconnect on 4401 ([`6bdead6`](https://github.com/zen-strayer/kanchi/commit/6bdead61d0e6dfd37f6e662a1bf3b1edb5d74034))
 - Add httpx dev dependency for starlette test client ([`2b6d51f`](https://github.com/zen-strayer/kanchi/commit/2b6d51f6332a0cd49cdacade70d8a978f6fbf2ce))
+- Create annotated tag so --follow-tags pushes it to remote [NOJIRA] ([`8d98f1c`](https://github.com/zen-strayer/kanchi/commit/8d98f1cfa2c087fe5aa564925d5399c81057a276))
+- Skip CHANGELOG commit if already up to date (idempotent re-run) [NOJIRA] ([`26e614c`](https://github.com/zen-strayer/kanchi/commit/26e614caa63289d0ee825bcd649bb95134fb2da5))
 
 
 ### Features
