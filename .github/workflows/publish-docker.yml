@@ -32,6 +32,16 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Validate image_tag input
+        if: ${{ inputs.image_tag != '' }}
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          if ! echo "$IMAGE_TAG" | grep -qE '^[a-zA-Z0-9][a-zA-Z0-9._-]*$'; then
+            echo "::error::image_tag must contain only alphanumeric characters, hyphens, dots, or underscores."
+            exit 1
+          fi
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
