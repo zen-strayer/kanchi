@@ -79,7 +79,7 @@ class TaskService:
 
         except Exception as e:
             self.session.rollback()
-            logger.error(f"Failed to save task event {task_event.task_id[:8]}: {e}")
+            logger.error("Failed to save task event %s: %s", task_event.task_id[:8], e)
             raise
 
     def get_task_events(self, task_id: str) -> list[TaskEvent]:
@@ -232,11 +232,11 @@ class TaskService:
     def get_unretried_orphaned_tasks(self) -> list[TaskEvent]:
         """Get orphaned tasks that have not been retried and have no final-state event."""
         FINAL_STATES = {
-            "task-succeeded",
-            "task-failed",
-            "task-revoked",
-            "task-rejected",
-            "task-retried",
+            EventType.TASK_SUCCEEDED.value,
+            EventType.TASK_FAILED.value,
+            EventType.TASK_REVOKED.value,
+            EventType.TASK_REJECTED.value,
+            EventType.TASK_RETRIED.value,
         }
 
         # Latest orphaned event per task (same subquery as before, now in service)
@@ -403,10 +403,10 @@ class TaskService:
             original_events = self.session.query(TaskEventDB).filter_by(task_id=original_task_id).all()
 
             for event in original_events:
-                existing_retries = json.loads(event.retried_by) if event.retried_by else []
+                existing_retries = list(event.retried_by) if event.retried_by else []
                 existing_retries.append(new_task_id)
 
-                event.retried_by = json.dumps(existing_retries)
+                event.retried_by = existing_retries
                 event.has_retries = True
                 event.retry_count = len(existing_retries)
 
@@ -414,7 +414,7 @@ class TaskService:
 
         except Exception as e:
             self.session.rollback()
-            logger.error(f"Failed to create retry relationship: {e}")
+            logger.error("Failed to create retry relationship: %s", e)
             raise
 
     def mark_new_task_as_retry(self, new_task_id: str, original_task_id: str):
@@ -440,7 +440,7 @@ class TaskService:
 
         except Exception as e:
             self.session.rollback()
-            logger.error(f"Failed to mark task as retry: {e}")
+            logger.error("Failed to mark task as retry: %s", e)
             raise
 
     def get_task_summary_stats(self) -> dict[str, Any]:
@@ -628,7 +628,7 @@ class TaskService:
             exception=task_event.exception,
             traceback=task_event.traceback,
             retry_of=task_event.retry_of.task_id if task_event.retry_of else None,
-            retried_by=(json.dumps([t.task_id for t in task_event.retried_by]) if task_event.retried_by else None),
+            retried_by=([t.task_id for t in task_event.retried_by] if task_event.retried_by else None),
             is_retry=task_event.is_retry,
             has_retries=task_event.has_retries,
             retry_count=task_event.retry_count,
@@ -1177,7 +1177,7 @@ class TaskService:
                 start_dt = parser.isoparse(start_time)
                 query = query.filter(timestamp_column >= start_dt)
             except (ValueError, ImportError) as e:
-                logger.error(f"Failed to parse start_time: {start_time}, error: {e}")
+                logger.error("Failed to parse start_time: %s, error: %s", start_time, e)
 
         if end_time:
             try:
@@ -1186,7 +1186,7 @@ class TaskService:
                 end_dt = parser.isoparse(end_time)
                 query = query.filter(timestamp_column <= end_dt)
             except (ValueError, ImportError) as e:
-                logger.error(f"Failed to parse end_time: {end_time}, error: {e}")
+                logger.error("Failed to parse end_time: %s, error: %s", end_time, e)
 
         return query
 

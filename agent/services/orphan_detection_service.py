@@ -24,7 +24,7 @@ class OrphanDetectionService:
         if orphaned_tasks:
             self._mark_tasks_as_orphaned(orphaned_tasks, orphaned_at, grace_period_seconds)
         else:
-            logger.info(f"No tasks to orphan for offline worker {hostname}")
+            logger.info("No tasks to orphan for offline worker %s", hostname)
 
         return orphaned_tasks
 
@@ -68,7 +68,9 @@ class OrphanDetectionService:
         self.session.commit()
 
         logger.info(
-            f"Marked {len(orphaned_tasks)} tasks as orphaned for offline worker (grace period: {grace_period_seconds}s)"
+            "Marked %s tasks as orphaned for offline worker (grace period: %ss)",
+            len(orphaned_tasks),
+            grace_period_seconds,
         )
 
     def create_orphan_events(self, orphaned_tasks: list[TaskEventDB], orphaned_at: datetime) -> list[TaskEvent]:
@@ -111,5 +113,5 @@ class OrphanDetectionService:
         orphan_events = self.create_orphan_events(orphaned_tasks, orphaned_at)
 
         for orphan_event in orphan_events:
-            logger.info(f"Broadcasting orphan event for task {orphan_event.task_id}")
+            logger.info("Broadcasting orphan event for task %s", orphan_event.task_id)
             connection_manager.queue_broadcast(orphan_event)

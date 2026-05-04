@@ -94,7 +94,7 @@ class DailyStatsService:
         try:
             self.session.commit()
         except Exception as e:
-            logger.error(f"Error updating daily stats for {task_name} on {event_date}: {e}")
+            logger.error("Error updating daily stats for %s on %s: %s", task_name, event_date, e)
             self.session.rollback()
             raise
 

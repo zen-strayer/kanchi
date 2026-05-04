@@ -82,7 +82,7 @@ def create_router(app_state) -> APIRouter:  # noqa: C901
         active_env=Depends(get_active_env),
     ):
         """Get recent task events with filtering and pagination."""
-        logger.info(f"API /events/recent called with session env={active_env.name if active_env else 'None'}")
+        logger.info("API /events/recent called with session env=%s", active_env.name if active_env else "None")
 
         task_service = TaskService(session, active_env=active_env)
         try:

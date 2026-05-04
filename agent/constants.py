@@ -26,6 +26,7 @@ class EventType(StrEnum):
     TASK_FAILED = "task-failed"
     TASK_RETRIED = "task-retried"
     TASK_REVOKED = "task-revoked"
+    TASK_REJECTED = "task-rejected"
     TASK_ORPHANED = "task-orphaned"
     WORKER_ONLINE = "worker-online"
     WORKER_OFFLINE = "worker-offline"
@@ -59,6 +60,7 @@ COMPLETED_EVENT_TYPES = [
     EventType.TASK_SUCCEEDED,
     EventType.TASK_FAILED,
     EventType.TASK_REVOKED,
+    EventType.TASK_REJECTED,
 ]
 
 NON_TERMINAL_EVENT_TYPES = [

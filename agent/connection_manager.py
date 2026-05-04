@@ -46,7 +46,7 @@ class ConnectionManager:
                     continue
 
             except Exception as e:
-                logger.error(f"Error in background broadcaster: {e}", exc_info=True)
+                logger.error("Error in background broadcaster: %s", e, exc_info=True)
                 await asyncio.sleep(0.1)
 
     async def stop_background_broadcaster(self):
@@ -66,7 +66,7 @@ class ConnectionManager:
         self.client_filters[websocket] = {}
         self.client_modes[websocket] = "live"
         self.client_environments[websocket] = None
-        logger.info(f"Client connected (pre-accepted). Total connections: {len(self.active_connections)}")
+        logger.info("Client connected (pre-accepted). Total connections: %s", len(self.active_connections))
         if len(self.active_connections) == 1:
             self.start_background_broadcaster()
 
@@ -76,7 +76,7 @@ class ConnectionManager:
         self.client_filters[websocket] = {}
         self.client_modes[websocket] = "live"
         self.client_environments[websocket] = None
-        logger.info(f"Client connected. Total connections: {len(self.active_connections)}")
+        logger.info("Client connected. Total connections: %s", len(self.active_connections))
 
         if len(self.active_connections) == 1:
             self.start_background_broadcaster()
@@ -90,7 +90,7 @@ class ConnectionManager:
             del self.client_modes[websocket]
         if websocket in self.client_environments:
             del self.client_environments[websocket]
-        logger.info(f"Client disconnected. Total connections: {len(self.active_connections)}")
+        logger.info("Client disconnected. Total connections: %s", len(self.active_connections))
 
     def queue_broadcast(self, task_event: TaskEvent):
         self._queue_event("task", task_event)
@@ -106,7 +106,7 @@ class ConnectionManager:
             try:
                 self._loop.call_soon_threadsafe(self.message_queue.put_nowait, (event_type, event))
             except Exception as e:
-                logger.error(f"Error queuing {event_type} event: {e}", exc_info=True)
+                logger.error("Error queuing %s event: %s", event_type, e, exc_info=True)
 
     async def _broadcast_task_event(self, task_event: TaskEvent):
         await self._broadcast_event(task_event, check_filters=True)
@@ -140,7 +140,7 @@ class ConnectionManager:
 
                 await connection.send_text(message)
             except Exception as e:
-                logger.error(f"Error broadcasting to client: {e}")
+                logger.error("Error broadcasting to client: %s", e)
                 disconnected.append(connection)
 
         for connection in disconnected:
@@ -166,7 +166,7 @@ class ConnectionManager:
     def set_client_mode(self, websocket: WebSocket, mode: str):
         if mode in ["live", "static"]:
             self.client_modes[websocket] = mode
-            logger.info(f"Client mode set to: {mode}")
+            logger.info("Client mode set to: %s", mode)
 
     def set_client_environment(self, websocket: WebSocket, queue_patterns: list[str], worker_patterns: list[str]):
         """Register environment filter patterns for a client connection."""
@@ -203,5 +203,5 @@ class ConnectionManager:
         try:
             await websocket.send_text(message)
         except Exception as e:
-            logger.error(f"Error sending message to client: {e}")
+            logger.error("Error sending message to client: %s", e)
             self.disconnect(websocket)

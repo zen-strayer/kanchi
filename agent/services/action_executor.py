@@ -55,7 +55,7 @@ class ActionExecutor:
         handler_class = self.ACTION_HANDLERS.get(action_type)
 
         if not handler_class:
-            logger.error(f"Unknown action type: {action_type}")
+            logger.error("Unknown action type: %s", action_type)
             return ActionResult(
                 action_type=action_type,
                 status="failed",
@@ -71,7 +71,7 @@ class ActionExecutor:
             result = await handler.execute(context, params)
             return result
         except Exception as e:
-            logger.error(f"Action execution failed: {action_type} - {e}", exc_info=True)
+            logger.error("Action execution failed: %s - %s", action_type, e, exc_info=True)
             return ActionResult(action_type=action_type, status="failed", error_message=str(e), duration_ms=0)
 
     @classmethod
@@ -88,4 +88,4 @@ class ActionExecutor:
     def register_action_handler(cls, action_type: str, handler_class: type[ActionHandler]):
         """Register a new action handler (for extensibility)."""
         cls.ACTION_HANDLERS[action_type] = handler_class
-        logger.info(f"Registered action handler: {action_type}")
+        logger.info("Registered action handler: %s", action_type)

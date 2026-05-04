@@ -38,11 +38,11 @@ class WorkflowExecutor:
             workflow_id=workflow.id,
             trigger_type=workflow.trigger.type,
             trigger_event=context,
-            workflow_snapshot=workflow.dict(),
+            workflow_snapshot=workflow.model_dump(),
             circuit_breaker_key=circuit_breaker_key,
         )
 
-        logger.info(f"Started workflow execution: {workflow.name} (execution_id={execution_id})")
+        logger.info("Started workflow execution: %s (execution_id=%s)", workflow.name, execution_id)
 
         action_results = []
         overall_status = "completed"
@@ -56,8 +56,11 @@ class WorkflowExecutor:
 
             for idx, action_config in enumerate(workflow.actions):
                 logger.info(
-                    f"Executing action {idx + 1}/{len(workflow.actions)}: "
-                    f"{action_config.type} (workflow={workflow.name})"
+                    "Executing action %s/%s: %s (workflow=%s)",
+                    idx + 1,
+                    len(workflow.actions),
+                    action_config.type,
+                    workflow.name,
                 )
 
                 result = await action_executor.execute(
@@ -76,7 +79,10 @@ class WorkflowExecutor:
 
                 if result.status == "failed":
                     logger.warning(
-                        f"Action failed: {action_config.type} - {result.error_message} (workflow={workflow.name})"
+                        "Action failed: %s - %s (workflow=%s)",
+                        action_config.type,
+                        result.error_message,
+                        workflow.name,
                     )
 
                     if not action_config.continue_on_failure:
@@ -88,15 +94,17 @@ class WorkflowExecutor:
             workflow_service.update_workflow_stats(workflow_id=workflow.id, success=(overall_status == "completed"))
 
             logger.info(
-                f"Completed workflow execution: {workflow.name} "
-                f"(status={overall_status}, actions={len(action_results)})"
+                "Completed workflow execution: %s (status=%s, actions=%s)",
+                workflow.name,
+                overall_status,
+                len(action_results),
             )
 
         except Exception as e:
             overall_status = "failed"
             error_message = str(e)
             stack_trace = traceback.format_exc()
-            logger.error(f"Workflow execution error: {workflow.name} - {e}", exc_info=True)
+            logger.error("Workflow execution error: %s - %s", workflow.name, e, exc_info=True)
 
         finally:
             workflow_service.update_workflow_execution(

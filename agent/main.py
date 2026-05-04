@@ -45,10 +45,10 @@ def main():
     if args.log_level != "INFO":
         config.log_level = args.log_level
 
-    logger.info(f"Starting Celery Event Monitor server on {config.ws_host}:{config.ws_port}")
-    logger.info(f"Monitoring Celery broker: {mask_sensitive_url(config.broker_url)}")
-    logger.info(f"Web interface: http://{config.ws_host}:{config.ws_port}")
-    logger.info(f"WebSocket endpoint: ws://{config.ws_host}:{config.ws_port}/ws")
+    logger.info("Starting Celery Event Monitor server on %s:%s", config.ws_host, config.ws_port)
+    logger.info("Monitoring Celery broker: %s", mask_sensitive_url(config.broker_url))
+    logger.info("Web interface: http://%s:%s", config.ws_host, config.ws_port)
+    logger.info("WebSocket endpoint: ws://%s:%s/ws", config.ws_host, config.ws_port)
 
     # Start the FastAPI server
     uvicorn.run(

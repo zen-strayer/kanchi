@@ -97,7 +97,7 @@ class GenericFilter:
         elif operator == "not_in":
             return query.filter(~column.in_(values))
 
-        logger.warning(f"Unknown operator '{operator}', returning unmodified query")
+        logger.warning("Unknown operator '%s', returning unmodified query", operator)
         return query
 
 
