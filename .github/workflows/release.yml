@@ -21,6 +21,7 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
     permissions:
       contents: write
 
@@ -32,7 +33,7 @@ jobs:
 
       - name: Generate release body
         id: cliff
-        uses: orhun/git-cliff-action@v4
+        uses: orhun/git-cliff-action@f50e11560dce63f7c33227798f90b924471a88b5  # v4
         with:
           config: cliff.toml
           args: >-
@@ -56,7 +57,7 @@ jobs:
           fi
 
       - name: Update CHANGELOG.md
-        uses: orhun/git-cliff-action@v4
+        uses: orhun/git-cliff-action@f50e11560dce63f7c33227798f90b924471a88b5  # v4
         with:
           config: cliff.toml
           args: --tag v${{ steps.version.outputs.value }}
@@ -77,10 +78,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          ARGS=""
-          [ "${{ inputs.prerelease }}" = "true" ] && ARGS="$ARGS --prerelease"
-          [ "${{ inputs.draft }}" = "true" ] && ARGS="$ARGS --draft"
+          ARGS=()
+          [ "${{ inputs.prerelease }}" = "true" ] && ARGS+=(--prerelease)
+          [ "${{ inputs.draft }}" = "true" ] && ARGS+=(--draft)
           gh release create "v${{ steps.version.outputs.value }}" \
             --title "v${{ steps.version.outputs.value }}" \
             --notes-file /tmp/release-body.md \
-            $ARGS
+            "${ARGS[@]}"
