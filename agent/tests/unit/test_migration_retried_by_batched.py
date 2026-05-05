@@ -5,6 +5,7 @@ Runs against an in-memory SQLite DB created with the OLD schema (retried_by TEXT
 to verify that upgrade() correctly migrates to JSON and downgrade() reverts.
 All tests use the SQLite path of the migration (batch_alter_table).
 """
+
 import importlib.util
 import json
 import unittest
@@ -18,8 +19,7 @@ from sqlalchemy import create_engine, inspect, text
 def _load_migration():
     """Load the migration module from its file path."""
     migration_path = (
-        Path(__file__).parent.parent.parent
-        / "alembic" / "versions" / "ccfacd9fe52b_retried_by_text_to_json.py"
+        Path(__file__).parent.parent.parent / "alembic" / "versions" / "ccfacd9fe52b_retried_by_text_to_json.py"
     )
     spec = importlib.util.spec_from_file_location("ccfacd9fe52b", migration_path)
     module = importlib.util.module_from_spec(spec)
@@ -35,19 +35,16 @@ def _old_schema_engine():
     """
     engine = create_engine("sqlite:///:memory:")
     with engine.connect() as conn:
-        conn.execute(text(
-            "CREATE TABLE task_events ("
-            "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
-            "  task_id TEXT NOT NULL,"
-            "  retried_by TEXT"
-            ")"
-        ))
-        conn.execute(text(
-            "CREATE TABLE task_latest ("
-            "  task_id TEXT PRIMARY KEY,"
-            "  retried_by TEXT"
-            ")"
-        ))
+        conn.execute(
+            text(
+                "CREATE TABLE task_events ("
+                "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                "  task_id TEXT NOT NULL,"
+                "  retried_by TEXT"
+                ")"
+            )
+        )
+        conn.execute(text("CREATE TABLE task_latest (  task_id TEXT PRIMARY KEY,  retried_by TEXT)"))
         conn.commit()
     return engine
 
@@ -101,9 +98,9 @@ class TestUpgradeMigratesColumn(unittest.TestCase):
         """
         engine = _old_schema_engine()
         with engine.connect() as conn:
-            conn.execute(text(
-                "INSERT INTO task_events (task_id, retried_by) VALUES ('t2', '[\"retry-1\",\"retry-2\"]')"
-            ))
+            conn.execute(
+                text("INSERT INTO task_events (task_id, retried_by) VALUES ('t2', '[\"retry-1\",\"retry-2\"]')")
+            )
             conn.commit()
         _run_upgrade(engine)
         with engine.connect() as conn:
@@ -136,9 +133,7 @@ class TestUpgradeMigratesColumn(unittest.TestCase):
         """JSON array data in task_latest must survive upgrade intact."""
         engine = _old_schema_engine()
         with engine.connect() as conn:
-            conn.execute(text(
-                "INSERT INTO task_latest (task_id, retried_by) VALUES ('tl2', '[\"r1\",\"r2\"]')"
-            ))
+            conn.execute(text("INSERT INTO task_latest (task_id, retried_by) VALUES ('tl2', '[\"r1\",\"r2\"]')"))
             conn.commit()
         _run_upgrade(engine)
         with engine.connect() as conn:
@@ -165,9 +160,7 @@ class TestDowngradeRevertsColumn(unittest.TestCase):
         """Rows with JSON-list data must survive downgrade with data intact."""
         engine = _old_schema_engine()
         with engine.connect() as conn:
-            conn.execute(text(
-                "INSERT INTO task_events (task_id, retried_by) VALUES ('t3', '[\"a\",\"b\"]')"
-            ))
+            conn.execute(text("INSERT INTO task_events (task_id, retried_by) VALUES ('t3', '[\"a\",\"b\"]')"))
             conn.commit()
         _run_upgrade(engine)
         _run_downgrade(engine)
