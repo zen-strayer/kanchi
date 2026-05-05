@@ -76,8 +76,116 @@ def _downgrade_sqlite() -> None:
 # ---------------------------------------------------------------------------
 
 def _upgrade_postgresql() -> None:
-    pass  # Implemented in next task
+    conn = op.get_bind()
+    # Break out of Alembic's wrapping transaction so each statement auto-commits,
+    # keeping ACCESS EXCLUSIVE lock windows to milliseconds per DDL statement.
+    conn.execute(sa.text("COMMIT"))
+
+    # ── task_events ──────────────────────────────────────────────────────────
+    conn.execute(sa.text(
+        "ALTER TABLE task_events ADD COLUMN IF NOT EXISTS retried_by_new JSON"
+    ))
+
+    # Backfill in batches using integer PK cursor to avoid long-running row locks
+    while True:
+        result = conn.execute(sa.text(
+            "UPDATE task_events"
+            " SET retried_by_new = retried_by::json"
+            " WHERE id IN ("
+            "   SELECT id FROM task_events"
+            "   WHERE retried_by_new IS NULL AND retried_by IS NOT NULL"
+            "   LIMIT :batch_size"
+            " )"
+        ), {"batch_size": _BATCH_SIZE})
+        if result.rowcount == 0:
+            break
+
+    _pg_swap_column(conn, "task_events")
+
+    # ── task_latest ──────────────────────────────────────────────────────────
+    conn.execute(sa.text(
+        "ALTER TABLE task_latest ADD COLUMN IF NOT EXISTS retried_by_new JSON"
+    ))
+
+    # Backfill using ctid because task_latest has a varchar PK
+    while True:
+        result = conn.execute(sa.text(
+            "UPDATE task_latest"
+            " SET retried_by_new = retried_by::json"
+            " WHERE ctid IN ("
+            "   SELECT ctid FROM task_latest"
+            "   WHERE retried_by_new IS NULL AND retried_by IS NOT NULL"
+            "   LIMIT :batch_size"
+            " )"
+        ), {"batch_size": _BATCH_SIZE})
+        if result.rowcount == 0:
+            break
+
+    _pg_swap_column(conn, "task_latest")
+
+
+def _pg_swap_column(conn, table: str) -> None:
+    """
+    Rename retried_by → retried_by_old, retried_by_new → retried_by,
+    sync any rows written during the backfill window, then drop retried_by_old.
+
+    Idempotent: checks information_schema before renaming.
+    """
+    already_swapped = conn.execute(sa.text(
+        "SELECT 1 FROM information_schema.columns"
+        " WHERE table_name = :t AND column_name = 'retried_by_old'"
+    ), {"t": table}).fetchone()
+
+    if not already_swapped:
+        conn.execute(sa.text(f"ALTER TABLE {table} RENAME COLUMN retried_by TO retried_by_old"))
+        conn.execute(sa.text(f"ALTER TABLE {table} RENAME COLUMN retried_by_new TO retried_by"))
+
+    # Sync rows written to retried_by_old after backfill started
+    conn.execute(sa.text(
+        f"UPDATE {table}"
+        f" SET retried_by = retried_by_old::json"
+        f" WHERE retried_by IS NULL AND retried_by_old IS NOT NULL"
+    ))
+
+    conn.execute(sa.text(f"ALTER TABLE {table} DROP COLUMN IF EXISTS retried_by_old"))
 
 
 def _downgrade_postgresql() -> None:
-    pass  # Implemented in next task
+    conn = op.get_bind()
+    conn.execute(sa.text("COMMIT"))
+
+    for table in ["task_latest", "task_events"]:
+        conn.execute(sa.text(
+            f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS retried_by_old TEXT"
+        ))
+
+        # Backfill using ctid (works for both tables regardless of PK type)
+        while True:
+            result = conn.execute(sa.text(
+                f"UPDATE {table}"
+                f" SET retried_by_old = retried_by::text"
+                f" WHERE ctid IN ("
+                f"   SELECT ctid FROM {table}"
+                f"   WHERE retried_by_old IS NULL AND retried_by IS NOT NULL"
+                f"   LIMIT :batch_size"
+                f" )"
+            ), {"batch_size": _BATCH_SIZE})
+            if result.rowcount == 0:
+                break
+
+        already_swapped = conn.execute(sa.text(
+            "SELECT 1 FROM information_schema.columns"
+            " WHERE table_name = :t AND column_name = 'retried_by_new'"
+        ), {"t": table}).fetchone()
+
+        if not already_swapped:
+            conn.execute(sa.text(f"ALTER TABLE {table} RENAME COLUMN retried_by TO retried_by_new"))
+            conn.execute(sa.text(f"ALTER TABLE {table} RENAME COLUMN retried_by_old TO retried_by"))
+
+        conn.execute(sa.text(
+            f"UPDATE {table}"
+            f" SET retried_by = retried_by_new::text"
+            f" WHERE retried_by IS NULL AND retried_by_new IS NOT NULL"
+        ))
+
+        conn.execute(sa.text(f"ALTER TABLE {table} DROP COLUMN IF EXISTS retried_by_new"))
