@@ -8,17 +8,22 @@ from alembic import context
 # Add parent directory to path to import our models
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-# Import our models and config
-from config import Config
 from database import Base
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
 
-# Get database URL from environment variable (supports BYOD)
-app_config = Config.from_env()
-config.set_main_option("sqlalchemy.url", app_config.database_url)
+# Resolve DATABASE_URL: honour what the caller already set on the config object
+# (e.g. migrate.py), then fall back to the environment variable directly.
+# We intentionally do NOT call Config.from_env() here so that migrations can
+# run without CELERY_BROKER_URL or any other app-level env vars.
+database_url = config.get_main_option("sqlalchemy.url") or os.environ.get("DATABASE_URL")
+if not database_url:
+    raise RuntimeError(
+        "DATABASE_URL environment variable is required to run migrations."
+    )
+config.set_main_option("sqlalchemy.url", database_url)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

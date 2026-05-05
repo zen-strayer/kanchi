@@ -4,7 +4,7 @@ version: "3.9"
 # Database migrations are NOT run automatically on startup.
 # Run migrations manually before first start and after each image upgrade:
 #
-#   docker compose run --rm kanchi sh -c "cd /app/agent && alembic upgrade head"
+#   docker compose run --rm kanchi sh -c "cd /app/agent && python migrate.py"
 #
 ##############################################################################
 
