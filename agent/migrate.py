@@ -6,15 +6,17 @@ Usage:
     DATABASE_URL=postgresql://user:pass@host/db uv run python migrate.py
     DATABASE_URL=postgresql://user:pass@host/db uv run python migrate.py --check
 """
+
 import os
 import sys
 import traceback
 
+import sqlalchemy as sa
 from alembic.config import Config as AlembicConfig
-from alembic import command
 from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
-import sqlalchemy as sa
+
+from alembic import command
 
 
 def _build_config(database_url: str) -> AlembicConfig:
@@ -32,7 +34,10 @@ def check(database_url: str) -> int:
     expected = set(ScriptDirectory.from_config(cfg).get_heads())
     pending = expected - current
     if pending:
-        print(f"Schema is out of date — {len(pending)} pending migration(s): {', '.join(sorted(pending))}", file=sys.stderr)
+        print(
+            f"Schema is out of date — {len(pending)} pending migration(s): {', '.join(sorted(pending))}",
+            file=sys.stderr,
+        )
         return 1
     print("Schema is up to date.")
     return 0
