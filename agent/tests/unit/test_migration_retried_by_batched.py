@@ -76,22 +76,48 @@ class TestUpgradeMigratesColumn(unittest.TestCase):
 
     def test_upgrade_retried_by_column_survives(self):
         """After upgrade, task_events must still have a retried_by column."""
-        pass
+        engine = _old_schema_engine()
+        _run_upgrade(engine)
+        inspector = inspect(engine)
+        col_names = [c["name"] for c in inspector.get_columns("task_events")]
+        self.assertIn("retried_by", col_names)
 
     def test_upgrade_null_retried_by_stays_null(self):
         """Rows with NULL retried_by must remain NULL after upgrade."""
-        pass
+        engine = _old_schema_engine()
+        with engine.connect() as conn:
+            conn.execute(text("INSERT INTO task_events (task_id, retried_by) VALUES ('t1', NULL)"))
+            conn.commit()
+        _run_upgrade(engine)
+        with engine.connect() as conn:
+            row = conn.execute(text("SELECT retried_by FROM task_events WHERE task_id = 't1'")).fetchone()
+        self.assertIsNone(row[0])
 
     def test_upgrade_json_text_is_preserved(self):
         """
         Rows whose retried_by TEXT contains a JSON array must survive upgrade
         with the same data intact (SQLite JSON is stored as text internally).
         """
-        pass
+        engine = _old_schema_engine()
+        with engine.connect() as conn:
+            conn.execute(text(
+                "INSERT INTO task_events (task_id, retried_by) VALUES ('t2', '[\"retry-1\",\"retry-2\"]')"
+            ))
+            conn.commit()
+        _run_upgrade(engine)
+        with engine.connect() as conn:
+            row = conn.execute(text("SELECT retried_by FROM task_events WHERE task_id = 't2'")).fetchone()
+        import json
+        value = row[0] if isinstance(row[0], list) else json.loads(row[0])
+        self.assertEqual(value, ["retry-1", "retry-2"])
 
     def test_upgrade_task_latest_column_survives(self):
         """After upgrade, task_latest must still have a retried_by column."""
-        pass
+        engine = _old_schema_engine()
+        _run_upgrade(engine)
+        inspector = inspect(engine)
+        col_names = [c["name"] for c in inspector.get_columns("task_latest")]
+        self.assertIn("retried_by", col_names)
 
 
 class TestDowngradeRevertsColumn(unittest.TestCase):
@@ -99,11 +125,28 @@ class TestDowngradeRevertsColumn(unittest.TestCase):
 
     def test_downgrade_retried_by_column_survives(self):
         """After downgrade, task_events must still have a retried_by column."""
-        pass
+        engine = _old_schema_engine()
+        _run_upgrade(engine)
+        _run_downgrade(engine)
+        inspector = inspect(engine)
+        col_names = [c["name"] for c in inspector.get_columns("task_events")]
+        self.assertIn("retried_by", col_names)
 
     def test_downgrade_preserves_data(self):
         """Rows with JSON-list data must survive downgrade with data intact."""
-        pass
+        engine = _old_schema_engine()
+        with engine.connect() as conn:
+            conn.execute(text(
+                "INSERT INTO task_events (task_id, retried_by) VALUES ('t3', '[\"a\",\"b\"]')"
+            ))
+            conn.commit()
+        _run_upgrade(engine)
+        _run_downgrade(engine)
+        with engine.connect() as conn:
+            row = conn.execute(text("SELECT retried_by FROM task_events WHERE task_id = 't3'")).fetchone()
+        import json
+        value = row[0] if isinstance(row[0], list) else json.loads(row[0])
+        self.assertEqual(value, ["a", "b"])
 
 
 class TestUpgradeIsIdempotent(unittest.TestCase):
@@ -111,4 +154,9 @@ class TestUpgradeIsIdempotent(unittest.TestCase):
 
     def test_double_upgrade_does_not_raise(self):
         """upgrade() called twice on the same DB must not raise."""
-        pass
+        engine = _old_schema_engine()
+        _run_upgrade(engine)
+        try:
+            _run_upgrade(engine)
+        except Exception as exc:
+            self.fail(f"Second upgrade() raised unexpectedly: {exc}")
