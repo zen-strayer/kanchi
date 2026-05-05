@@ -13,7 +13,7 @@ help:
 
 migrate:
 	@echo "Applying database migrations..."
-	cd agent && uv run alembic upgrade head
+	cd agent && uv run python migrate.py
 	@echo "Migrations complete."
 
 dev:

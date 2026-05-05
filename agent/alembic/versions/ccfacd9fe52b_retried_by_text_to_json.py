@@ -137,8 +137,12 @@ def _pg_swap_column(conn, table: str) -> None:
     ), {"t": table}).fetchone()
 
     if not already_swapped:
+        # Wrap both renames in one transaction so the swap is atomic — no window
+        # where retried_by is absent by name and concurrent writes can error.
+        conn.execute(sa.text("BEGIN"))
         conn.execute(sa.text(f"ALTER TABLE {table} RENAME COLUMN retried_by TO retried_by_old"))
         conn.execute(sa.text(f"ALTER TABLE {table} RENAME COLUMN retried_by_new TO retried_by"))
+        conn.execute(sa.text("COMMIT"))
 
     # Sync rows written to retried_by_old after backfill started
     conn.execute(sa.text(
@@ -179,8 +183,10 @@ def _downgrade_postgresql() -> None:
         ), {"t": table}).fetchone()
 
         if not already_swapped:
+            conn.execute(sa.text("BEGIN"))
             conn.execute(sa.text(f"ALTER TABLE {table} RENAME COLUMN retried_by TO retried_by_new"))
             conn.execute(sa.text(f"ALTER TABLE {table} RENAME COLUMN retried_by_old TO retried_by"))
+            conn.execute(sa.text("COMMIT"))
 
         conn.execute(sa.text(
             f"UPDATE {table}"
