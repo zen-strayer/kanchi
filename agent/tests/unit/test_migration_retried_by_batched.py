@@ -123,6 +123,31 @@ class TestUpgradeMigratesColumn(unittest.TestCase):
         col_types = {c["name"]: str(c["type"]) for c in inspector.get_columns("task_latest")}
         self.assertEqual(col_types["retried_by"], "JSON")
 
+    def test_upgrade_task_latest_null_stays_null(self):
+        """Rows in task_latest with NULL retried_by must remain NULL after upgrade."""
+        engine = _old_schema_engine()
+        with engine.connect() as conn:
+            conn.execute(text("INSERT INTO task_latest (task_id, retried_by) VALUES ('tl1', NULL)"))
+            conn.commit()
+        _run_upgrade(engine)
+        with engine.connect() as conn:
+            row = conn.execute(text("SELECT retried_by FROM task_latest WHERE task_id = 'tl1'")).fetchone()
+            self.assertIsNone(row[0])
+
+    def test_upgrade_task_latest_data_preserved(self):
+        """JSON array data in task_latest must survive upgrade intact."""
+        engine = _old_schema_engine()
+        with engine.connect() as conn:
+            conn.execute(text(
+                "INSERT INTO task_latest (task_id, retried_by) VALUES ('tl2', '[\"r1\",\"r2\"]')"
+            ))
+            conn.commit()
+        _run_upgrade(engine)
+        with engine.connect() as conn:
+            row = conn.execute(text("SELECT retried_by FROM task_latest WHERE task_id = 'tl2'")).fetchone()
+            value = row[0] if isinstance(row[0], list) else json.loads(row[0])
+            self.assertEqual(value, ["r1", "r2"])
+
 
 class TestDowngradeRevertsColumn(unittest.TestCase):
     """downgrade() should revert retried_by from JSON back to TEXT on SQLite."""
@@ -152,6 +177,15 @@ class TestDowngradeRevertsColumn(unittest.TestCase):
             row = conn.execute(text("SELECT retried_by FROM task_events WHERE task_id = 't3'")).fetchone()
             value = row[0] if isinstance(row[0], list) else json.loads(row[0])
             self.assertEqual(value, ["a", "b"])
+
+    def test_downgrade_task_latest_column_reverts_to_text(self):
+        """After downgrade, task_latest retried_by column type must be TEXT."""
+        engine = _old_schema_engine()
+        _run_upgrade(engine)
+        _run_downgrade(engine)
+        inspector = inspect(engine)
+        col_types = {c["name"]: str(c["type"]) for c in inspector.get_columns("task_latest")}
+        self.assertEqual(col_types["retried_by"], "TEXT")
 
 
 class TestUpgradeIsIdempotent(unittest.TestCase):
