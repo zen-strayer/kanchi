@@ -241,9 +241,9 @@ async def initialize_application():
         logging.basicConfig(level=getattr(logging, config.log_level), format=config.log_format)
 
     app_state.db_manager = DatabaseManager(config.database_url)
-    logger.info("Running database migrations for: %s", mask_sensitive_url(config.database_url))
-    app_state.db_manager.run_migrations()
-    logger.info("Database migrations completed")
+    logger.info("Checking database schema for: %s", mask_sensitive_url(config.database_url))
+    app_state.db_manager.check_pending_migrations()
+    logger.info("Database schema is up to date")
 
     # Seed default configuration entries
     try:

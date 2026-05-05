@@ -9,7 +9,7 @@ Kanchi is a real-time Celery task monitoring (and management) system with an enj
 - Task retry tracking and orphan detection
 - Daily task statistics and history
 - Worker health monitoring
-- Auto-migrations with Alembic
+- Alembic-managed database migrations
 
 ## Screenshots
 
@@ -174,7 +174,20 @@ export ENABLE_PICKLE_SERIALIZATION=false
 
 Kanchi expects a Celery broker (RabbitMQ or Redis) and (if desired) PostgreSQL to be managed separately—point `CELERY_BROKER_URL` and `DATABASE_URL` to the infrastructure you already run.
 
-Migrations run automatically on startup.
+### Database migrations
+
+Migrations must be run manually — they are not applied automatically on startup. Run them before the first start and after every image upgrade:
+
+```bash
+# Docker Compose
+docker compose run --rm kanchi sh -c "cd /app/agent && alembic upgrade head"
+
+# Local development
+make migrate
+# or: cd agent && uv run alembic upgrade head
+```
+
+The application will refuse to start and print a clear error if the schema is out of date.
 
 ### Pickle payloads (opt-in)
 
