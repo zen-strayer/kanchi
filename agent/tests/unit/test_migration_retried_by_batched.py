@@ -7,11 +7,9 @@ All tests use the SQLite path of the migration (batch_alter_table).
 """
 import importlib.util
 import json
-import sys
 import unittest
 from pathlib import Path
 
-import sqlalchemy as sa
 from alembic.operations import Operations
 from alembic.runtime.migration import MigrationContext
 from sqlalchemy import create_engine, inspect, text

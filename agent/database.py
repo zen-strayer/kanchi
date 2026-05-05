@@ -791,8 +791,9 @@ class DatabaseManager:
         """Apply all pending Alembic migrations. Intended for tooling and tests, not app startup."""
         import os
 
-        from alembic import command
         from alembic.config import Config as AlembicConfig
+
+        from alembic import command
 
         current_dir = os.path.dirname(os.path.abspath(__file__))
         alembic_cfg = AlembicConfig(os.path.join(current_dir, "alembic.ini"))
@@ -808,9 +809,9 @@ class DatabaseManager:
         """
         import os
 
+        from alembic.config import Config as AlembicConfig
         from alembic.runtime.migration import MigrationContext
         from alembic.script import ScriptDirectory
-        from alembic.config import Config as AlembicConfig
 
         current_dir = os.path.dirname(os.path.abspath(__file__))
         alembic_cfg = AlembicConfig(os.path.join(current_dir, "alembic.ini"))
