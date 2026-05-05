@@ -180,11 +180,11 @@ Migrations must be run manually — they are not applied automatically on startu
 
 ```bash
 # Docker Compose
-docker compose run --rm kanchi sh -c "cd /app/agent && alembic upgrade head"
+docker compose run --rm kanchi sh -c "cd /app/agent && python -m alembic upgrade head"
 
 # Local development
 make migrate
-# or: cd agent && uv run alembic upgrade head
+# or: cd agent && uv run python -m alembic upgrade head
 ```
 
 The application will refuse to start and print a clear error if the schema is out of date.
