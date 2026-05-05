@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.5.1] - 2026-05-05
+
+### Features
+
+- Standalone migrate.py with reliable exit codes [NOJIRA] ([`59d1d9a`](https://github.com/zen-strayer/kanchi/commit/59d1d9a5a0114643af38c1f7ac595cdf31db0211))
+
 ## [1.5.0] - 2026-05-05
 
 ### Features
