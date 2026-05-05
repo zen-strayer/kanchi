@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.3] - 2026-05-05
+
+### Features
+
+- Implement SQLite path for batched retried_by migration ([`9917423`](https://github.com/zen-strayer/kanchi/commit/99174239fdc1f4fa4ae43d57534a8878ddace002))
+- Zero-downtime batched PostgreSQL path for retried_by Text→JSON ([`4d5d975`](https://github.com/zen-strayer/kanchi/commit/4d5d9752f41d0464539aa2c3ff7c84bc91c4c1a6))
+
 ## [1.4.0] - 2026-05-04
 
 ### Bug Fixes
