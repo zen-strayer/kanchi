@@ -1,14 +1,20 @@
-.PHONY: dev logs backend frontend seed demo-data help
+.PHONY: dev logs backend frontend seed demo-data migrate help
 
 help:
 	@echo "Kanchi Development Commands"
 	@echo "==========================="
-	@echo "make dev      - Start both backend and frontend in development mode"
-	@echo "make logs     - Tail unified log file (last 100 lines and follow)"
-	@echo "make backend  - Start backend only"
-	@echo "make frontend - Start frontend only"
-	@echo "make seed     - Seed database with marketing/demo data (clears existing data)"
+	@echo "make migrate   - Apply pending database migrations (run before first start and after upgrades)"
+	@echo "make dev       - Start both backend and frontend in development mode"
+	@echo "make logs      - Tail unified log file (last 100 lines and follow)"
+	@echo "make backend   - Start backend only"
+	@echo "make frontend  - Start frontend only"
+	@echo "make seed      - Seed database with marketing/demo data (clears existing data)"
 	@echo "make demo-data - Seed database with full demo dataset (clears existing data)"
+
+migrate:
+	@echo "Applying database migrations..."
+	cd agent && uv run alembic upgrade head
+	@echo "Migrations complete."
 
 dev:
 	@echo "Starting Kanchi in development mode..."

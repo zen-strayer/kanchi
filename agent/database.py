@@ -788,18 +788,47 @@ class DatabaseManager:
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
 
     def run_migrations(self):
-        """Run Alembic migrations to upgrade database to latest version."""
+        """Apply all pending Alembic migrations. Intended for tooling and tests, not app startup."""
         import os
 
+        from alembic import command
         from alembic.config import Config as AlembicConfig
 
-        from alembic import command
-
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        alembic_ini_path = os.path.join(current_dir, "alembic.ini")
-        alembic_cfg = AlembicConfig(alembic_ini_path)
+        alembic_cfg = AlembicConfig(os.path.join(current_dir, "alembic.ini"))
         alembic_cfg.set_main_option("sqlalchemy.url", self.database_url)
         command.upgrade(alembic_cfg, "head")
+
+    def check_pending_migrations(self) -> None:
+        """Raise RuntimeError if the database schema is behind the current migration head.
+
+        Call this at startup instead of run_migrations() so that schema drift is caught
+        immediately with a clear message rather than causing silent data errors.
+        Run 'alembic upgrade head' (or 'make migrate') to apply pending migrations.
+        """
+        import os
+
+        from alembic.runtime.migration import MigrationContext
+        from alembic.script import ScriptDirectory
+        from alembic.config import Config as AlembicConfig
+
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        alembic_cfg = AlembicConfig(os.path.join(current_dir, "alembic.ini"))
+        alembic_cfg.set_main_option("sqlalchemy.url", self.database_url)
+
+        with self.engine.connect() as conn:
+            current_heads = set(MigrationContext.configure(conn).get_current_heads())
+
+        expected_heads = set(ScriptDirectory.from_config(alembic_cfg).get_heads())
+
+        if current_heads != expected_heads:
+            pending = expected_heads - current_heads
+            raise RuntimeError(
+                f"Database schema is out of date — {len(pending)} unapplied migration(s): "
+                f"{', '.join(sorted(pending))}. "
+                f"Run 'alembic upgrade head' from the agent/ directory (or 'make migrate') "
+                f"before starting the application."
+            )
 
     @contextmanager
     def get_session(self) -> Session:
