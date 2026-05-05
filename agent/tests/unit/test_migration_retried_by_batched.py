@@ -6,6 +6,7 @@ to verify that upgrade() correctly migrates to JSON and downgrade() reverts.
 All tests use the SQLite path of the migration (batch_alter_table).
 """
 import importlib.util
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -93,7 +94,7 @@ class TestUpgradeMigratesColumn(unittest.TestCase):
         _run_upgrade(engine)
         with engine.connect() as conn:
             row = conn.execute(text("SELECT retried_by FROM task_events WHERE task_id = 't1'")).fetchone()
-        self.assertIsNone(row[0])
+            self.assertIsNone(row[0])
 
     def test_upgrade_json_text_is_preserved(self):
         """
@@ -109,9 +110,8 @@ class TestUpgradeMigratesColumn(unittest.TestCase):
         _run_upgrade(engine)
         with engine.connect() as conn:
             row = conn.execute(text("SELECT retried_by FROM task_events WHERE task_id = 't2'")).fetchone()
-        import json
-        value = row[0] if isinstance(row[0], list) else json.loads(row[0])
-        self.assertEqual(value, ["retry-1", "retry-2"])
+            value = row[0] if isinstance(row[0], list) else json.loads(row[0])
+            self.assertEqual(value, ["retry-1", "retry-2"])
 
     def test_upgrade_task_latest_column_survives(self):
         """After upgrade, task_latest must still have a retried_by column."""
@@ -150,9 +150,8 @@ class TestDowngradeRevertsColumn(unittest.TestCase):
         _run_downgrade(engine)
         with engine.connect() as conn:
             row = conn.execute(text("SELECT retried_by FROM task_events WHERE task_id = 't3'")).fetchone()
-        import json
-        value = row[0] if isinstance(row[0], list) else json.loads(row[0])
-        self.assertEqual(value, ["a", "b"])
+            value = row[0] if isinstance(row[0], list) else json.loads(row[0])
+            self.assertEqual(value, ["a", "b"])
 
 
 class TestUpgradeIsIdempotent(unittest.TestCase):
