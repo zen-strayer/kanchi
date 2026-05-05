@@ -20,9 +20,7 @@ config = context.config
 # run without CELERY_BROKER_URL or any other app-level env vars.
 database_url = config.get_main_option("sqlalchemy.url") or os.environ.get("DATABASE_URL")
 if not database_url:
-    raise RuntimeError(
-        "DATABASE_URL environment variable is required to run migrations."
-    )
+    raise RuntimeError("DATABASE_URL environment variable is required to run migrations.")
 config.set_main_option("sqlalchemy.url", database_url)
 
 # Interpret the config file for Python logging.
