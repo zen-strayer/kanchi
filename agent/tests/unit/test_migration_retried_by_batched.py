@@ -81,6 +81,8 @@ class TestUpgradeMigratesColumn(unittest.TestCase):
         inspector = inspect(engine)
         col_names = [c["name"] for c in inspector.get_columns("task_events")]
         self.assertIn("retried_by", col_names)
+        col_types = {c["name"]: str(c["type"]) for c in inspector.get_columns("task_events")}
+        self.assertEqual(col_types["retried_by"], "JSON")
 
     def test_upgrade_null_retried_by_stays_null(self):
         """Rows with NULL retried_by must remain NULL after upgrade."""
@@ -118,6 +120,8 @@ class TestUpgradeMigratesColumn(unittest.TestCase):
         inspector = inspect(engine)
         col_names = [c["name"] for c in inspector.get_columns("task_latest")]
         self.assertIn("retried_by", col_names)
+        col_types = {c["name"]: str(c["type"]) for c in inspector.get_columns("task_latest")}
+        self.assertEqual(col_types["retried_by"], "JSON")
 
 
 class TestDowngradeRevertsColumn(unittest.TestCase):
@@ -131,6 +135,8 @@ class TestDowngradeRevertsColumn(unittest.TestCase):
         inspector = inspect(engine)
         col_names = [c["name"] for c in inspector.get_columns("task_events")]
         self.assertIn("retried_by", col_names)
+        col_types = {c["name"]: str(c["type"]) for c in inspector.get_columns("task_events")}
+        self.assertEqual(col_types["retried_by"], "TEXT")
 
     def test_downgrade_preserves_data(self):
         """Rows with JSON-list data must survive downgrade with data intact."""
