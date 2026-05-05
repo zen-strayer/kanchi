@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.5.0] - 2026-05-05
+
+### Features
+
+- Remove auto-run on startup, add schema check and manual migrate command ([`19ef218`](https://github.com/zen-strayer/kanchi/commit/19ef218d3f07cd8b5f7bdcdf06d9d36e2c56c9e8))
+
 ## [1.4.3] - 2026-05-05
 
 ### Features
