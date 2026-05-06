@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.5.2] - 2026-05-06
+
+### Bug Fixes
+
+- Show 30-day historical stats instead of 24H window ([`9789312`](https://github.com/zen-strayer/kanchi/commit/9789312a4148e910caaa49e6d6e0037d88e66e70))
+
 ## [1.5.1] - 2026-05-05
 
 ### Features
