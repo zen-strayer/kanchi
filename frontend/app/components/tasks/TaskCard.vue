@@ -22,8 +22,9 @@
     <!-- Frequency Timeline -->
     <div class="mb-4">
       <TaskFrequencyTimeline
-        v-if="timeline && timeline.buckets"
-        :buckets="timeline.buckets"
+        v-if="timelineBuckets.length > 0"
+        :buckets="timelineBuckets"
+        period="30d"
       />
       <div v-else class="h-12 bg-background-base rounded-md animate-pulse"></div>
     </div>
@@ -106,7 +107,7 @@ import TaskFrequencyTimeline from './TaskFrequencyTimeline.vue'
 import Tag from '~/components/common/Tag.vue'
 import { Button } from '~/components/ui/button'
 import { Alert } from '~/components/alert'
-import type { TaskRegistryResponse, TaskRegistryStats, TaskTimelineResponse } from '~/services/apiClient'
+import type { TaskRegistryResponse, TaskDailyStatsResponse } from '~/services/apiClient'
 
 interface Props {
   task: TaskRegistryResponse
@@ -116,16 +117,37 @@ const props = defineProps<Props>()
 defineEmits(['click'])
 
 const taskRegistryStore = useTaskRegistryStore()
-const stats = ref<TaskRegistryStats | null>(null)
-const timeline = ref<TaskTimelineResponse | null>(null)
+const dailyStats = ref<TaskDailyStatsResponse[]>([])
 
-// Critical failures: tasks that failed with no successful retry in the chain
-// The 'failed' stat already represents terminal failures (max retries exceeded or no retry configured)
-// If a retry succeeded, the original task wouldn't be counted in 'failed'
-const criticalFailures = computed(() => {
-  if (!stats.value) return 0
-  return stats.value.failed || 0
+// Aggregate 30-day totals from daily stats
+const stats = computed(() => {
+  if (!dailyStats.value || dailyStats.value.length === 0) return null
+  const totalExec = dailyStats.value.reduce((s, d) => s + d.total_executions, 0)
+  const totalSucceeded = dailyStats.value.reduce((s, d) => s + d.succeeded, 0)
+  const totalFailed = dailyStats.value.reduce((s, d) => s + d.failed, 0)
+  const totalRetried = dailyStats.value.reduce((s, d) => s + d.retried, 0)
+  const runtimes = dailyStats.value.filter(d => d.avg_runtime != null && d.total_executions > 0)
+  const avgRuntime = runtimes.length > 0
+    ? runtimes.reduce((s, d) => s + d.avg_runtime! * d.total_executions, 0) /
+      runtimes.reduce((s, d) => s + d.total_executions, 0)
+    : null
+  return { total_executions: totalExec, succeeded: totalSucceeded, failed: totalFailed, retried: totalRetried, avg_runtime: avgRuntime }
 })
+
+// Map daily stats to timeline bucket shape
+const timelineBuckets = computed(() => {
+  if (!dailyStats.value || dailyStats.value.length === 0) return []
+  // daily-stats is newest-first; reverse to oldest-first for the chart
+  return [...dailyStats.value].reverse().map(d => ({
+    timestamp: d.date,
+    total_executions: d.total_executions,
+    succeeded: d.succeeded,
+    failed: d.failed,
+    retried: d.retried,
+  }))
+})
+
+const criticalFailures = computed(() => stats.value?.failed || 0)
 
 // Format helpers
 function formatLastSeen(dateStr: string) {
@@ -152,12 +174,6 @@ function formatRuntime(runtime: number | null | undefined) {
 }
 
 onMounted(async () => {
-  const [statsData, timelineData] = await Promise.all([
-    taskRegistryStore.fetchTaskStats(props.task.name, 24),
-    taskRegistryStore.fetchTaskTimeline(props.task.name, 24, 60) // 24 hours, 1-hour buckets
-  ])
-
-  stats.value = statsData
-  timeline.value = timelineData
+  dailyStats.value = await taskRegistryStore.fetchDailyStats(props.task.name, 30)
 })
 </script>

@@ -2,7 +2,7 @@
   <div class="space-y-2">
     <!-- Timeline label -->
     <div class="flex items-center justify-between text-xs font-mono text-text-muted">
-      <span>24H ACTIVITY</span>
+      <span>{{ props.period === '30d' ? '30D ACTIVITY' : '24H ACTIVITY' }}</span>
       <span v-if="maxExecutions > 0">{{ maxExecutions }} peak</span>
     </div>
 
@@ -81,8 +81,8 @@
 
     <!-- Time labels -->
     <div class="flex justify-between text-[10px] font-mono text-text-muted">
-      <span>24h ago</span>
-      <span>12h</span>
+      <span>{{ props.period === '30d' ? '30d ago' : '24h ago' }}</span>
+      <span>{{ props.period === '30d' ? '15d' : '12h' }}</span>
       <span>now</span>
     </div>
   </div>
@@ -96,6 +96,7 @@ import type { TimelineBucket } from '~/services/apiClient'
 
 interface Props {
   buckets: TimelineBucket[]
+  period?: '24h' | '30d'
 }
 
 const props = defineProps<Props>()
@@ -120,18 +121,17 @@ function getSegmentHeight(bucket: TimelineBucket, count: number) {
   return `${percentage}%`
 }
 
-// Format timestamp for tooltip
+// Format timestamp for tooltip — date-only strings (YYYY-MM-DD) in daily mode
 function formatTime(timestamp: string) {
+  if (props.period === '30d') {
+    const date = new Date(timestamp + 'T00:00:00')
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  }
   const date = new Date(timestamp)
   const now = new Date()
   const diffHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60))
-
-  if (diffHours === 0) {
-    return 'Now'
-  } else if (diffHours === 1) {
-    return '1h ago'
-  } else {
-    return `${diffHours}h ago`
-  }
+  if (diffHours === 0) return 'Now'
+  if (diffHours === 1) return '1h ago'
+  return `${diffHours}h ago`
 }
 </script>
