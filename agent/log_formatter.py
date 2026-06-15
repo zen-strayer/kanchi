@@ -51,6 +51,16 @@ class CloudLoggingFormatter(logging.Formatter):
         return json.dumps(payload, default=str)
 
 
+def _resolve_level(log_level: str) -> int:
+    """Resolve a log-level name to its numeric value.
+
+    Tolerant of case (``"info"`` resolves to ``INFO``) and of unknown names, which fall
+    back to ``INFO`` so a misconfigured ``LOG_LEVEL`` degrades gracefully rather than
+    crashing the monitoring agent at startup.
+    """
+    return logging.getLevelNamesMapping().get(log_level.upper(), logging.INFO)
+
+
 def configure_logging(config) -> None:
     """Configure root logging for the application based on ``config``.
 
@@ -64,7 +74,7 @@ def configure_logging(config) -> None:
     ``config`` is duck-typed: it must expose ``development_mode``, ``log_level``,
     ``log_format`` and ``log_file``.
     """
-    level = getattr(logging, config.log_level)
+    level = _resolve_level(config.log_level)
 
     if config.development_mode:
         # Clean the unified log file on startup, then log human-readable text to both
@@ -80,7 +90,12 @@ def configure_logging(config) -> None:
         )
 
         # Frontend logs share the unified file with their own tag and do not propagate.
+        # Drop any handlers from a previous configure_logging call so repeated setup
+        # (e.g. a reload) does not accumulate duplicate file handlers.
         frontend_logger = logging.getLogger("kanchi.frontend")
+        for existing in list(frontend_logger.handlers):
+            frontend_logger.removeHandler(existing)
+            existing.close()
         frontend_logger.setLevel(level)
         fh = logging.FileHandler(config.log_file)
         fh.setFormatter(logging.Formatter("%(asctime)s [FRONTEND] %(levelname)s - %(message)s"))

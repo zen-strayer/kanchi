@@ -79,6 +79,21 @@ class TestCloudLoggingFormatter(unittest.TestCase):
         self.assertIn("time", payload)
         self.assertTrue(payload["time"])
 
+    def test_severity_matches_debug_level(self):
+        """DEBUG records must map to severity=DEBUG."""
+        payload = json.loads(self.formatter.format(_make_record(logging.DEBUG, "trace")))
+        self.assertEqual(payload["severity"], "DEBUG")
+
+    def test_severity_matches_critical_level(self):
+        """CRITICAL records must map to severity=CRITICAL."""
+        payload = json.loads(self.formatter.format(_make_record(logging.CRITICAL, "fatal")))
+        self.assertEqual(payload["severity"], "CRITICAL")
+
+    def test_unicode_message_round_trips(self):
+        """Non-ASCII content must survive serialization intact (json escapes, json decodes back)."""
+        payload = json.loads(self.formatter.format(_make_record(logging.INFO, "café 日本語 \U0001f600")))
+        self.assertEqual(payload["message"], "café 日本語 \U0001f600")
+
     def test_exception_traceback_included_in_message(self):
         """When a record has exc_info, the traceback must be folded into the message."""
         try:
@@ -106,11 +121,24 @@ class TestConfigureLogging(unittest.TestCase):
         root = logging.getLogger()
         self._saved_handlers = root.handlers[:]
         self._saved_level = root.level
+        frontend = logging.getLogger("kanchi.frontend")
+        self._saved_frontend_handlers = frontend.handlers[:]
+        self._saved_frontend_level = frontend.level
+        self._saved_frontend_propagate = frontend.propagate
 
     def tearDown(self):
         root = logging.getLogger()
         root.handlers[:] = self._saved_handlers
         root.setLevel(self._saved_level)
+        # Restore the kanchi.frontend logger too, closing only handlers this test created,
+        # so configure_logging's dev-mode setup cannot leak into the rest of the suite.
+        frontend = logging.getLogger("kanchi.frontend")
+        for h in list(frontend.handlers):
+            if h not in self._saved_frontend_handlers:
+                h.close()
+        frontend.handlers[:] = self._saved_frontend_handlers
+        frontend.setLevel(self._saved_frontend_level)
+        frontend.propagate = self._saved_frontend_propagate
 
     def test_production_emits_cloud_logging_json_to_stdout(self):
         """In production, the root logger must write Cloud Logging JSON to stdout (not stderr)."""
@@ -140,6 +168,24 @@ class TestConfigureLogging(unittest.TestCase):
         with tempfile.NamedTemporaryFile(suffix=".log") as tmp:
             configure_logging(_config(development_mode=True, log_file=tmp.name))
         self.assertFalse(any(isinstance(h.formatter, CloudLoggingFormatter) for h in logging.getLogger().handlers))
+
+    def test_lowercase_log_level_does_not_crash(self):
+        """A lowercase LOG_LEVEL (e.g. 'info') must resolve to the level, not raise."""
+        configure_logging(_config(development_mode=False, log_level="info"))
+        self.assertEqual(logging.getLogger().level, logging.INFO)
+
+    def test_invalid_log_level_falls_back_to_info(self):
+        """An unknown LOG_LEVEL must degrade to INFO instead of crashing the agent at startup."""
+        configure_logging(_config(development_mode=False, log_level="BOGUS"))
+        self.assertEqual(logging.getLogger().level, logging.INFO)
+
+    def test_repeated_dev_configure_does_not_duplicate_frontend_handlers(self):
+        """configure_logging must be idempotent for the kanchi.frontend logger in dev mode."""
+        with tempfile.NamedTemporaryFile(suffix=".log") as tmp:
+            cfg = _config(development_mode=True, log_file=tmp.name)
+            configure_logging(cfg)
+            configure_logging(cfg)
+            self.assertEqual(len(logging.getLogger("kanchi.frontend").handlers), 1)
 
 
 if __name__ == "__main__":
