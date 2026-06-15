@@ -67,7 +67,6 @@ class Config:
 
     # Logging configuration
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
-    log_format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     log_file: str = os.getenv("LOG_FILE", "kanchi.log")
 
     # Performance settings

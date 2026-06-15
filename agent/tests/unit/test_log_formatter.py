@@ -8,6 +8,7 @@ severity from the (stderr) stream.
 
 import json
 import logging
+import logging.config
 import os
 import sys
 import tempfile
@@ -16,7 +17,7 @@ from types import SimpleNamespace
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-from log_formatter import CloudLoggingFormatter, configure_logging
+from log_formatter import CloudLoggingFormatter, build_uvicorn_log_config, configure_logging
 
 
 def _config(**overrides):
@@ -24,11 +25,31 @@ def _config(**overrides):
     base = {
         "development_mode": False,
         "log_level": "INFO",
-        "log_format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         "log_file": "kanchi.log",
     }
     base.update(overrides)
     return SimpleNamespace(**base)
+
+
+def _snapshot_loggers(names):
+    """Capture handlers/level/propagate for the named loggers (plus root) for restoration."""
+    snap = {}
+    for name in names:
+        lg = logging.getLogger(name)
+        snap[name] = (lg.handlers[:], lg.level, lg.propagate)
+    return snap
+
+
+def _restore_loggers(snap):
+    """Restore loggers captured by _snapshot_loggers, closing any handlers added since."""
+    for name, (handlers, level, propagate) in snap.items():
+        lg = logging.getLogger(name)
+        for h in list(lg.handlers):
+            if h not in handlers:
+                h.close()
+        lg.handlers[:] = handlers
+        lg.setLevel(level)
+        lg.propagate = propagate
 
 
 def _make_record(level: int, msg: str, args=(), *, name: str = "services.orphan_detection_service"):
@@ -186,6 +207,95 @@ class TestConfigureLogging(unittest.TestCase):
             configure_logging(cfg)
             configure_logging(cfg)
             self.assertEqual(len(logging.getLogger("kanchi.frontend").handlers), 1)
+
+
+class TestUvicornLogConfig(unittest.TestCase):
+    """build_uvicorn_log_config must hand uvicorn a config that routes ITS loggers through
+    the JSON formatter in production, so uvicorn's own logs aren't tagged ERROR by GKE."""
+
+    _UVICORN_LOGGERS = ["", "uvicorn", "uvicorn.error", "uvicorn.access"]
+
+    def setUp(self):
+        self._snap = _snapshot_loggers(self._UVICORN_LOGGERS)
+
+    def tearDown(self):
+        _restore_loggers(self._snap)
+
+    def test_returns_none_in_development(self):
+        """Dev keeps uvicorn's default console logging — no override."""
+        self.assertIsNone(build_uvicorn_log_config(_config(development_mode=True)))
+
+    def test_production_uses_cloud_formatter_factory(self):
+        """The formatter must be the CloudLoggingFormatter, referenced by import path."""
+        cfg = build_uvicorn_log_config(_config(development_mode=False))
+        formatter = next(iter(cfg["formatters"].values()))
+        self.assertEqual(formatter["()"], "log_formatter.CloudLoggingFormatter")
+
+    def test_production_routes_uvicorn_loggers_to_stdout(self):
+        """uvicorn / uvicorn.access / uvicorn.error must all be wired to a stdout handler."""
+        cfg = build_uvicorn_log_config(_config(development_mode=False))
+        stdout_handlers = [h for h, spec in cfg["handlers"].items() if spec.get("stream") == "ext://sys.stdout"]
+        self.assertTrue(stdout_handlers)
+        for name in ("uvicorn", "uvicorn.access", "uvicorn.error"):
+            self.assertIn(name, cfg["loggers"])
+            self.assertTrue(set(cfg["loggers"][name]["handlers"]) & set(stdout_handlers))
+
+    def test_production_config_is_valid_and_applies_json_to_uvicorn_loggers(self):
+        """The dict must be a valid dictConfig that yields JSON formatting on uvicorn loggers."""
+        cfg = build_uvicorn_log_config(_config(development_mode=False))
+        logging.config.dictConfig(cfg)
+        for name in ("", "uvicorn.access", "uvicorn.error"):
+            handlers = logging.getLogger(name).handlers
+            self.assertTrue(
+                any(isinstance(h.formatter, CloudLoggingFormatter) for h in handlers),
+                f"logger {name!r} should emit Cloud Logging JSON",
+            )
+
+
+class TestServerLoggingWiring(unittest.TestCase):
+    """main() and start_server() must hand the built log config to uvicorn so uvicorn's
+    loggers are covered too (not just the application's own loggers)."""
+
+    def setUp(self):
+        self._snap = _snapshot_loggers(["", "kanchi.frontend"])
+
+    def tearDown(self):
+        _restore_loggers(self._snap)
+
+    def _run_entrypoint_capturing_uvicorn(self, module, entry):
+        """Invoke an entrypoint with uvicorn.run and Config.from_env stubbed; return run kwargs."""
+        import config as config_module
+
+        cfg = config_module.Config(broker_url="redis://localhost:6379/0", development_mode=False)
+        captured = {}
+        orig_run = module.uvicorn.run
+        orig_from_env = config_module.Config.from_env
+        module.uvicorn.run = lambda *a, **k: captured.update(kwargs=k)
+        config_module.Config.from_env = staticmethod(lambda: cfg)
+        try:
+            entry()
+        finally:
+            module.uvicorn.run = orig_run
+            config_module.Config.from_env = orig_from_env
+        return captured["kwargs"], cfg
+
+    # NOTE: start_server() (the `python app.py` path) is wired identically to main(), but
+    # importing the `app` module triggers its module-level `app = create_app()`, which
+    # requires CELERY_BROKER_URL at import time — so it can't be exercised in a unit test
+    # without broker env. The production entrypoint is main.py (see start.sh), covered below;
+    # the log-config logic itself is covered by TestUvicornLogConfig.
+
+    def test_main_wires_cloud_logging_into_uvicorn(self):
+        import main as main_module
+
+        orig_argv = sys.argv
+        sys.argv = ["main.py"]
+        try:
+            kwargs, cfg = self._run_entrypoint_capturing_uvicorn(main_module, main_module.main)
+        finally:
+            sys.argv = orig_argv
+        self.assertIn("log_config", kwargs)
+        self.assertEqual(kwargs["log_config"], build_uvicorn_log_config(cfg))
 
 
 if __name__ == "__main__":

@@ -51,6 +51,43 @@ class CloudLoggingFormatter(logging.Formatter):
         return json.dumps(payload, default=str)
 
 
+def build_uvicorn_log_config(config) -> dict | None:
+    """Build a uvicorn ``log_config`` so uvicorn's own loggers emit Cloud Logging JSON.
+
+    uvicorn otherwise applies its default logging config, installing handlers on the
+    ``uvicorn`` / ``uvicorn.access`` / ``uvicorn.error`` loggers that write to stderr — so
+    those records would still be tagged ERROR by GKE regardless of the application's own
+    logging. This returns a ``logging.config.dictConfig`` dict that routes the root and
+    uvicorn loggers through :class:`CloudLoggingFormatter` on stdout in production, and
+    ``None`` in development (so uvicorn keeps its human-readable console logging locally).
+
+    ``config`` is duck-typed: it must expose ``development_mode`` and ``log_level``.
+    """
+    if config.development_mode:
+        return None
+
+    level = _resolve_level(config.log_level)
+    uvicorn_logger = {"handlers": ["stdout"], "level": level, "propagate": False}
+    return {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {"cloud_json": {"()": "log_formatter.CloudLoggingFormatter"}},
+        "handlers": {
+            "stdout": {
+                "class": "logging.StreamHandler",
+                "stream": "ext://sys.stdout",
+                "formatter": "cloud_json",
+            },
+        },
+        "root": {"handlers": ["stdout"], "level": level},
+        "loggers": {
+            "uvicorn": dict(uvicorn_logger),
+            "uvicorn.error": dict(uvicorn_logger),
+            "uvicorn.access": dict(uvicorn_logger),
+        },
+    }
+
+
 def _resolve_level(log_level: str) -> int:
     """Resolve a log-level name to its numeric value.
 
@@ -71,8 +108,8 @@ def configure_logging(config) -> None:
     Development: preserve human-readable text logging to the unified log file plus the
     console, including the dedicated ``kanchi.frontend`` logger.
 
-    ``config`` is duck-typed: it must expose ``development_mode``, ``log_level``,
-    ``log_format`` and ``log_file``.
+    ``config`` is duck-typed: it must expose ``development_mode``, ``log_level`` and
+    ``log_file``.
     """
     level = _resolve_level(config.log_level)
 

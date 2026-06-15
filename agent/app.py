@@ -17,7 +17,7 @@ from config import Config, mask_sensitive_url
 from connection_manager import ConnectionManager
 from database import DatabaseManager
 from event_handler import EventHandler
-from log_formatter import configure_logging
+from log_formatter import build_uvicorn_log_config, configure_logging
 from monitor import CeleryEventMonitor
 from security.auth import AuthManager
 from security.dependencies import build_auth_dependencies, get_auth_dependency
@@ -309,9 +309,19 @@ def start_health_monitor():
 def start_server():
     """Start the FastAPI server."""
     config = Config.from_env()
+    configure_logging(config)
     app = create_app()
 
-    uvicorn.run(app, host=config.ws_host, port=config.ws_port, log_level=config.log_level.lower(), reload=False)
+    # log_config routes uvicorn's own loggers through the JSON formatter in production
+    # (None in dev keeps uvicorn's default console logging).
+    uvicorn.run(
+        app,
+        host=config.ws_host,
+        port=config.ws_port,
+        log_level=config.log_level.lower(),
+        reload=False,
+        log_config=build_uvicorn_log_config(config),
+    )
 
 
 app = create_app()

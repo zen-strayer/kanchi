@@ -10,6 +10,7 @@ import logging
 import uvicorn
 
 from config import Config, mask_sensitive_url
+from log_formatter import build_uvicorn_log_config, configure_logging
 
 logger = logging.getLogger(__name__)
 
@@ -45,14 +46,23 @@ def main():
     if args.log_level != "INFO":
         config.log_level = args.log_level
 
+    # Configure logging before emitting any logs or starting uvicorn.
+    configure_logging(config)
+
     logger.info("Starting Celery Event Monitor server on %s:%s", config.ws_host, config.ws_port)
     logger.info("Monitoring Celery broker: %s", mask_sensitive_url(config.broker_url))
     logger.info("Web interface: http://%s:%s", config.ws_host, config.ws_port)
     logger.info("WebSocket endpoint: ws://%s:%s/ws", config.ws_host, config.ws_port)
 
-    # Start the FastAPI server
+    # Start the FastAPI server. log_config routes uvicorn's own loggers through the JSON
+    # formatter in production (None in dev keeps uvicorn's default console logging).
     uvicorn.run(
-        "app:app", host=config.ws_host, port=config.ws_port, log_level=config.log_level.lower(), reload=args.reload
+        "app:app",
+        host=config.ws_host,
+        port=config.ws_port,
+        log_level=config.log_level.lower(),
+        reload=args.reload,
+        log_config=build_uvicorn_log_config(config),
     )
 
 
