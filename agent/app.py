@@ -17,6 +17,7 @@ from config import Config, mask_sensitive_url
 from connection_manager import ConnectionManager
 from database import DatabaseManager
 from event_handler import EventHandler
+from log_formatter import configure_logging
 from monitor import CeleryEventMonitor
 from security.auth import AuthManager
 from security.dependencies import build_auth_dependencies, get_auth_dependency
@@ -213,32 +214,9 @@ async def initialize_application():
     config = Config.from_env()
     app_state.config = config
 
-    # Set up unified logging to file (only in development mode)
-    if config.development_mode:
-        # Clean the log file on startup
-        with open(config.log_file, "w") as f:
-            f.write("")
-
-        # Configure root logger
-        logging.basicConfig(
-            level=getattr(logging, config.log_level),
-            format="%(asctime)s [BACKEND] %(levelname)s - %(message)s",
-            handlers=[logging.FileHandler(config.log_file), logging.StreamHandler()],
-        )
-
-        # Configure frontend logger
-        frontend_logger = logging.getLogger("kanchi.frontend")
-        frontend_logger.setLevel(getattr(logging, config.log_level))
-        # Create file handler with custom format for frontend logs
-        fh = logging.FileHandler(config.log_file)
-        fh.setFormatter(logging.Formatter("%(asctime)s [FRONTEND] %(levelname)s - %(message)s"))
-        frontend_logger.addHandler(fh)
-        frontend_logger.propagate = False  # Don't propagate to root logger
-
-        logger.info("Development mode enabled - unified logging active")
-    else:
-        # Production mode - standard logging without file output
-        logging.basicConfig(level=getattr(logging, config.log_level), format=config.log_format)
+    # Configure logging: Cloud Logging JSON to stdout in production (so GKE reads the
+    # true severity instead of tagging all stderr as ERROR), human-readable text in dev.
+    configure_logging(config)
 
     app_state.db_manager = DatabaseManager(config.database_url)
     logger.info("Checking database schema for: %s", mask_sensitive_url(config.database_url))
