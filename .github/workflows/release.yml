@@ -70,7 +70,8 @@ jobs:
           if [ -n "${{ inputs.version }}" ]; then
             echo "value=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
           elif [ -n "${{ steps.cliff.outputs.version }}" ]; then
-            echo "value=${{ steps.cliff.outputs.version }}" >> "$GITHUB_OUTPUT"
+            VERSION="${{ steps.cliff.outputs.version }}"
+            echo "value=${VERSION#v}" >> "$GITHUB_OUTPUT"
           else
             echo "::error::No bumpable commits found since last tag (only chore/ci commits). Set the 'version' input to force a release."
             exit 1
