@@ -214,8 +214,9 @@ async def initialize_application():
     config = Config.from_env()
     app_state.config = config
 
-    # Configure logging: Cloud Logging JSON to stdout in production (so GKE reads the
-    # true severity instead of tagging all stderr as ERROR), human-readable text in dev.
+    # Configure logging: structured JSON to stdout in production (so the log collector
+    # reads the record's true level instead of inferring every stderr line as an error),
+    # human-readable text in dev.
     configure_logging(config)
 
     app_state.db_manager = DatabaseManager(config.database_url)
@@ -312,8 +313,8 @@ def start_server():
     configure_logging(config)
     app = create_app()
 
-    # log_config routes uvicorn's own loggers through the JSON formatter in production
-    # (None in dev keeps uvicorn's default console logging).
+    # log_config routes uvicorn's own loggers through the structured JSON formatter in
+    # production (None in dev keeps uvicorn's default console logging).
     uvicorn.run(
         app,
         host=config.ws_host,

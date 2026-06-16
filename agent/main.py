@@ -54,8 +54,9 @@ def main():
     logger.info("Web interface: http://%s:%s", config.ws_host, config.ws_port)
     logger.info("WebSocket endpoint: ws://%s:%s/ws", config.ws_host, config.ws_port)
 
-    # Start the FastAPI server. log_config routes uvicorn's own loggers through the JSON
-    # formatter in production (None in dev keeps uvicorn's default console logging).
+    # Start the FastAPI server. log_config routes uvicorn's own loggers through the
+    # structured JSON formatter in production (None in dev keeps uvicorn's default console
+    # logging).
     uvicorn.run(
         "app:app",
         host=config.ws_host,

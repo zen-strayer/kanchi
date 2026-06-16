@@ -1,15 +1,18 @@
-"""Structured JSON logging for GKE / Cloud Logging.
+"""Structured JSON logging for containerized deployments.
 
-GKE's logging agent ingests each container's stdout/stderr stream. When a line is
-plain text it infers ``severity`` from the *stream* — everything written to stderr is
-tagged ``ERROR``, regardless of the log record's real level. Python's
-``logging.basicConfig`` defaults its handler to stderr, so every ``INFO`` line kanchi
-emits surfaces in Cloud Logging as ``severity=ERROR``.
+Log collectors that ingest a container's stdout/stderr commonly infer a line's severity
+from the *stream* it came in on: anything on stderr is treated as an error, regardless of
+the log record's real level. Python's ``logging.basicConfig`` defaults its handler to
+stderr, so every ``INFO`` line the app emits can surface downstream as an error.
 
-When a line is valid JSON, the agent instead promotes recognized structured fields —
-notably ``severity`` — onto the LogEntry. Emitting one JSON object per record with an
-explicit ``severity`` therefore preserves the record's true level (INFO/WARNING/ERROR/
-CRITICAL) instead of collapsing it to the stream's inferred severity.
+When a line is valid JSON instead, collectors parse it and promote recognized fields onto
+the log entry. Emitting one JSON object per record with an explicit level therefore
+preserves the record's true level (DEBUG/INFO/WARNING/ERROR/CRITICAL) instead of
+collapsing it to the stream's inferred severity. To stay portable across collectors, each
+record carries both ``level`` (the de-facto convention read by CloudWatch, the ELK stack,
+Datadog and others) and ``severity`` (the field Google Cloud Logging promotes); they hold
+the same value. GKE's Cloud Logging agent is the deployment that originally surfaced this,
+but nothing here is specific to it — the same image can ship to AWS, DigitalOcean, etc.
 """
 
 import json
@@ -17,9 +20,9 @@ import logging
 import sys
 from datetime import UTC, datetime
 
-# Python log levels map 1:1 onto the LogSeverity strings Cloud Logging understands.
+# Python log levels map 1:1 onto the level/severity strings collectors understand.
 # Unknown/custom levels fall back to DEFAULT so they are never silently dropped.
-_SEVERITY_BY_LEVEL = {
+_LEVEL_NAMES = {
     logging.DEBUG: "DEBUG",
     logging.INFO: "INFO",
     logging.WARNING: "WARNING",
@@ -28,13 +31,14 @@ _SEVERITY_BY_LEVEL = {
 }
 
 
-class CloudLoggingFormatter(logging.Formatter):
-    """Render a ``logging.LogRecord`` as a single line of Cloud Logging JSON.
+class JSONLogFormatter(logging.Formatter):
+    """Render a ``logging.LogRecord`` as a single line of structured JSON.
 
-    The emitted object carries an explicit ``severity`` (mapped from the Python log
-    level), the rendered ``message``, the ``logger`` name, and an ISO-8601 ``time``.
-    When the record carries exception info, the formatted traceback is appended to the
-    ``message`` so Cloud Logging / Error Reporting can surface it.
+    The emitted object carries the log level under both ``level`` and ``severity`` (mapped
+    from the Python level, so it is portable across log collectors), the rendered
+    ``message``, the ``logger`` name, and an ISO-8601 ``time``. When the record carries
+    exception info, the formatted traceback is appended to the ``message`` so collectors /
+    error trackers can surface it.
     """
 
     def format(self, record: logging.LogRecord) -> str:
@@ -42,8 +46,10 @@ class CloudLoggingFormatter(logging.Formatter):
         if record.exc_info:
             message = f"{message}\n{self.formatException(record.exc_info)}"
 
+        level = _LEVEL_NAMES.get(record.levelno, "DEFAULT")
         payload = {
-            "severity": _SEVERITY_BY_LEVEL.get(record.levelno, "DEFAULT"),
+            "level": level,
+            "severity": level,
             "message": message,
             "logger": record.name,
             "time": datetime.fromtimestamp(record.created, tz=UTC).isoformat(),
@@ -52,14 +58,15 @@ class CloudLoggingFormatter(logging.Formatter):
 
 
 def build_uvicorn_log_config(config) -> dict | None:
-    """Build a uvicorn ``log_config`` so uvicorn's own loggers emit Cloud Logging JSON.
+    """Build a uvicorn ``log_config`` so uvicorn's own loggers emit structured JSON.
 
     uvicorn otherwise applies its default logging config, installing handlers on the
     ``uvicorn`` / ``uvicorn.access`` / ``uvicorn.error`` loggers that write to stderr — so
-    those records would still be tagged ERROR by GKE regardless of the application's own
-    logging. This returns a ``logging.config.dictConfig`` dict that routes the root and
-    uvicorn loggers through :class:`CloudLoggingFormatter` on stdout in production, and
-    ``None`` in development (so uvicorn keeps its human-readable console logging locally).
+    those records would still be inferred as errors by a stream-based collector regardless
+    of the application's own logging. This returns a ``logging.config.dictConfig`` dict
+    that routes the root and uvicorn loggers through :class:`JSONLogFormatter` on stdout in
+    production, and ``None`` in development (so uvicorn keeps its human-readable console
+    logging locally).
 
     ``config`` is duck-typed: it must expose ``development_mode`` and ``log_level``.
     """
@@ -71,12 +78,12 @@ def build_uvicorn_log_config(config) -> dict | None:
     return {
         "version": 1,
         "disable_existing_loggers": False,
-        "formatters": {"cloud_json": {"()": "log_formatter.CloudLoggingFormatter"}},
+        "formatters": {"json": {"()": "log_formatter.JSONLogFormatter"}},
         "handlers": {
             "stdout": {
                 "class": "logging.StreamHandler",
                 "stream": "ext://sys.stdout",
-                "formatter": "cloud_json",
+                "formatter": "json",
             },
         },
         "root": {"handlers": ["stdout"], "level": level},
@@ -102,8 +109,8 @@ def configure_logging(config) -> None:
     """Configure root logging for the application based on ``config``.
 
     Production (``development_mode`` falsey): install a single stdout handler emitting
-    Cloud Logging JSON via :class:`CloudLoggingFormatter`, so GKE reads the record's true
-    severity instead of tagging all stderr output as ERROR.
+    structured JSON via :class:`JSONLogFormatter`, so log collectors read the record's true
+    level instead of inferring it from the (stderr) stream.
 
     Development: preserve human-readable text logging to the unified log file plus the
     console, including the dedicated ``kanchi.frontend`` logger.
@@ -143,8 +150,8 @@ def configure_logging(config) -> None:
         logger.info("Development mode enabled - unified logging active")
         return
 
-    # Production: emit Cloud Logging JSON to stdout so GKE reads the real severity
-    # instead of tagging every stderr line as ERROR.
+    # Production: emit structured JSON to stdout so the collector reads the real level
+    # instead of inferring every stderr line as an error.
     handler = logging.StreamHandler(stream=sys.stdout)
-    handler.setFormatter(CloudLoggingFormatter())
+    handler.setFormatter(JSONLogFormatter())
     logging.basicConfig(level=level, handlers=[handler], force=True)

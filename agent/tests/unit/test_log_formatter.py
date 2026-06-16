@@ -1,9 +1,11 @@
-"""Tests for the Cloud Logging JSON formatter.
+"""Tests for the structured JSON log formatter.
 
 These pin down the structured-logging behavior that fixes kanchi's INFO-logs-as-ERROR
-problem in GKE: each record must serialize to a single JSON line carrying an explicit
-``severity`` matching the record's true Python level, so Cloud Logging stops inferring
-severity from the (stderr) stream.
+problem under any log collector that infers severity from the output stream: each record
+must serialize to a single JSON line carrying an explicit ``level``/``severity`` matching
+the record's true Python level, so the collector stops inferring severity from the
+(stderr) stream. (The deployment that surfaced this was GKE's Cloud Logging agent, but
+the fix is platform-agnostic.)
 """
 
 import json
@@ -17,7 +19,7 @@ from types import SimpleNamespace
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-from log_formatter import CloudLoggingFormatter, build_uvicorn_log_config, configure_logging
+from log_formatter import JSONLogFormatter, build_uvicorn_log_config, configure_logging
 
 
 def _config(**overrides):
@@ -57,9 +59,9 @@ def _make_record(level: int, msg: str, args=(), *, name: str = "services.orphan_
     return logging.LogRecord(name=name, level=level, pathname=__file__, lineno=1, msg=msg, args=args, exc_info=None)
 
 
-class TestCloudLoggingFormatter(unittest.TestCase):
+class TestJSONLogFormatter(unittest.TestCase):
     def setUp(self):
-        self.formatter = CloudLoggingFormatter()
+        self.formatter = JSONLogFormatter()
 
     def test_output_is_valid_single_line_json(self):
         """A formatted record must be exactly one line of parseable JSON."""
@@ -81,6 +83,15 @@ class TestCloudLoggingFormatter(unittest.TestCase):
         """A genuine ERROR record must carry severity=ERROR."""
         payload = json.loads(self.formatter.format(_make_record(logging.ERROR, "boom")))
         self.assertEqual(payload["severity"], "ERROR")
+
+    def test_level_field_mirrors_severity(self):
+        """A generic ``level`` field must accompany ``severity`` (same value) so collectors
+        that key on ``level`` — CloudWatch, ELK, Datadog, etc. — read the true level too,
+        not just GCP's ``severity``."""
+        for level, name in ((logging.INFO, "INFO"), (logging.WARNING, "WARNING"), (logging.ERROR, "ERROR")):
+            payload = json.loads(self.formatter.format(_make_record(level, "msg")))
+            self.assertEqual(payload["level"], name)
+            self.assertEqual(payload["level"], payload["severity"])
 
     def test_message_is_rendered_with_args(self):
         """%-style args must be interpolated into the message field."""
@@ -136,7 +147,7 @@ class TestCloudLoggingFormatter(unittest.TestCase):
 
 
 class TestConfigureLogging(unittest.TestCase):
-    """The production branch must route JSON-with-severity to stdout; dev stays plain text."""
+    """The production branch must route JSON-with-level to stdout; dev stays plain text."""
 
     def setUp(self):
         root = logging.getLogger()
@@ -161,19 +172,19 @@ class TestConfigureLogging(unittest.TestCase):
         frontend.setLevel(self._saved_frontend_level)
         frontend.propagate = self._saved_frontend_propagate
 
-    def test_production_emits_cloud_logging_json_to_stdout(self):
-        """In production, the root logger must write Cloud Logging JSON to stdout (not stderr)."""
+    def test_production_emits_json_to_stdout(self):
+        """In production, the root logger must write structured JSON to stdout (not stderr)."""
         configure_logging(_config(development_mode=False))
         json_handlers = [
             h
             for h in logging.getLogger().handlers
-            if isinstance(h, logging.StreamHandler) and isinstance(h.formatter, CloudLoggingFormatter)
+            if isinstance(h, logging.StreamHandler) and isinstance(h.formatter, JSONLogFormatter)
         ]
         self.assertTrue(json_handlers, "expected a JSON-formatted stream handler")
         self.assertTrue(all(h.stream is sys.stdout for h in json_handlers))
 
     def test_production_has_no_stderr_handler(self):
-        """No handler may target stderr in production — that is what GKE mis-tags as ERROR."""
+        """No handler may target stderr in production — that is the stream collectors mis-tag as ERROR."""
         configure_logging(_config(development_mode=False))
         stream_handlers = [h for h in logging.getLogger().handlers if isinstance(h, logging.StreamHandler)]
         self.assertTrue(stream_handlers)
@@ -188,7 +199,7 @@ class TestConfigureLogging(unittest.TestCase):
         """Local dev keeps human-readable logs; JSON formatting is a production-only concern."""
         with tempfile.NamedTemporaryFile(suffix=".log") as tmp:
             configure_logging(_config(development_mode=True, log_file=tmp.name))
-        self.assertFalse(any(isinstance(h.formatter, CloudLoggingFormatter) for h in logging.getLogger().handlers))
+        self.assertFalse(any(isinstance(h.formatter, JSONLogFormatter) for h in logging.getLogger().handlers))
 
     def test_lowercase_log_level_does_not_crash(self):
         """A lowercase LOG_LEVEL (e.g. 'info') must resolve to the level, not raise."""
@@ -211,7 +222,8 @@ class TestConfigureLogging(unittest.TestCase):
 
 class TestUvicornLogConfig(unittest.TestCase):
     """build_uvicorn_log_config must hand uvicorn a config that routes ITS loggers through
-    the JSON formatter in production, so uvicorn's own logs aren't tagged ERROR by GKE."""
+    the JSON formatter in production, so uvicorn's own logs aren't mis-tagged ERROR by a
+    stream-inferring collector."""
 
     _UVICORN_LOGGERS = ["", "uvicorn", "uvicorn.error", "uvicorn.access"]
 
@@ -225,11 +237,11 @@ class TestUvicornLogConfig(unittest.TestCase):
         """Dev keeps uvicorn's default console logging — no override."""
         self.assertIsNone(build_uvicorn_log_config(_config(development_mode=True)))
 
-    def test_production_uses_cloud_formatter_factory(self):
-        """The formatter must be the CloudLoggingFormatter, referenced by import path."""
+    def test_production_uses_json_formatter_factory(self):
+        """The formatter must be the JSONLogFormatter, referenced by import path."""
         cfg = build_uvicorn_log_config(_config(development_mode=False))
         formatter = next(iter(cfg["formatters"].values()))
-        self.assertEqual(formatter["()"], "log_formatter.CloudLoggingFormatter")
+        self.assertEqual(formatter["()"], "log_formatter.JSONLogFormatter")
 
     def test_production_routes_uvicorn_loggers_to_stdout(self):
         """uvicorn / uvicorn.access / uvicorn.error must all be wired to a stdout handler."""
@@ -247,8 +259,8 @@ class TestUvicornLogConfig(unittest.TestCase):
         for name in ("", "uvicorn.access", "uvicorn.error"):
             handlers = logging.getLogger(name).handlers
             self.assertTrue(
-                any(isinstance(h.formatter, CloudLoggingFormatter) for h in handlers),
-                f"logger {name!r} should emit Cloud Logging JSON",
+                any(isinstance(h.formatter, JSONLogFormatter) for h in handlers),
+                f"logger {name!r} should emit structured JSON",
             )
 
 
@@ -285,7 +297,7 @@ class TestServerLoggingWiring(unittest.TestCase):
     # without broker env. The production entrypoint is main.py (see start.sh), covered below;
     # the log-config logic itself is covered by TestUvicornLogConfig.
 
-    def test_main_wires_cloud_logging_into_uvicorn(self):
+    def test_main_wires_json_log_config_into_uvicorn(self):
         import main as main_module
 
         orig_argv = sys.argv
