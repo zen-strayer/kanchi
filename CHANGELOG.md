@@ -8,6 +8,7 @@
 - Harden level resolution and make dev logging setup idempotent [NOJIRA] ([`9fe3d26`](https://github.com/zen-strayer/kanchi/commit/9fe3d26548ace3e3201a9331ae640d527a261b00))
 - Route uvicorn's own loggers through Cloud Logging JSON [NOJIRA] ([`40d5a39`](https://github.com/zen-strayer/kanchi/commit/40d5a3928c470d0578c365ca41c82d986d6bd234))
 - Make structured JSON logging platform-agnostic [NOJIRA] ([`a21718b`](https://github.com/zen-strayer/kanchi/commit/a21718b071211a5d985b220e79d219aa3973ca41))
+- Strip leading v from git-cliff auto-detected version [NOJIRA] ([`726f466`](https://github.com/zen-strayer/kanchi/commit/726f4663e4731485d54a6ba308045af73018aaf2))
 
 ## [1.5.2] - 2026-05-06
 
