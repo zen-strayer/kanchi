@@ -63,9 +63,7 @@ class TestMetricsWorkerCleanup(unittest.TestCase):
         self.assertEqual(labels, set())
 
     def test_worker_offline_removes_task_events_total_series_for_that_worker(self):
-        self.collector.record_task_event(
-            _task_event("t1", "tasks.do_thing", EventType.TASK_RECEIVED.value, "worker-a")
-        )
+        self.collector.record_task_event(_task_event("t1", "tasks.do_thing", EventType.TASK_RECEIVED.value, "worker-a"))
 
         self.collector.record_worker_event(_worker_event("worker-a", EventType.WORKER_OFFLINE.value))
 
@@ -73,9 +71,7 @@ class TestMetricsWorkerCleanup(unittest.TestCase):
         self.assertEqual(labels, set())
 
     def test_worker_offline_removes_execution_duration_and_queue_wait_series(self):
-        self.collector.record_task_event(
-            _task_event("t1", "tasks.do_thing", EventType.TASK_RECEIVED.value, "worker-a")
-        )
+        self.collector.record_task_event(_task_event("t1", "tasks.do_thing", EventType.TASK_RECEIVED.value, "worker-a"))
         self.collector.record_task_event(_task_event("t1", "tasks.do_thing", EventType.TASK_STARTED.value, "worker-a"))
         self.collector.record_task_event(
             _task_event("t1", "tasks.do_thing", EventType.TASK_SUCCEEDED.value, "worker-a", runtime=1.5)
@@ -87,9 +83,7 @@ class TestMetricsWorkerCleanup(unittest.TestCase):
         self.assertEqual(_sample_label_tuples(self.collector, "kanchi_task_execution_duration_seconds_count"), set())
 
     def test_worker_offline_removes_prefetch_series_for_that_worker(self):
-        self.collector.record_task_event(
-            _task_event("t1", "tasks.do_thing", EventType.TASK_RECEIVED.value, "worker-a")
-        )
+        self.collector.record_task_event(_task_event("t1", "tasks.do_thing", EventType.TASK_RECEIVED.value, "worker-a"))
 
         self.collector.record_worker_event(_worker_event("worker-a", EventType.WORKER_OFFLINE.value))
 
@@ -97,12 +91,8 @@ class TestMetricsWorkerCleanup(unittest.TestCase):
         self.assertEqual(labels, set())
 
     def test_worker_offline_does_not_affect_other_workers_series(self):
-        self.collector.record_task_event(
-            _task_event("t1", "tasks.do_thing", EventType.TASK_RECEIVED.value, "worker-a")
-        )
-        self.collector.record_task_event(
-            _task_event("t2", "tasks.do_thing", EventType.TASK_RECEIVED.value, "worker-b")
-        )
+        self.collector.record_task_event(_task_event("t1", "tasks.do_thing", EventType.TASK_RECEIVED.value, "worker-a"))
+        self.collector.record_task_event(_task_event("t2", "tasks.do_thing", EventType.TASK_RECEIVED.value, "worker-b"))
 
         self.collector.record_worker_event(_worker_event("worker-a", EventType.WORKER_OFFLINE.value))
 
@@ -113,15 +103,11 @@ class TestMetricsWorkerCleanup(unittest.TestCase):
         )
 
     def test_worker_reappearing_after_offline_tracks_series_again(self):
-        self.collector.record_task_event(
-            _task_event("t1", "tasks.do_thing", EventType.TASK_RECEIVED.value, "worker-a")
-        )
+        self.collector.record_task_event(_task_event("t1", "tasks.do_thing", EventType.TASK_RECEIVED.value, "worker-a"))
         self.collector.record_worker_event(_worker_event("worker-a", EventType.WORKER_OFFLINE.value))
 
         self.collector.record_worker_event(_worker_event("worker-a", EventType.WORKER_ONLINE.value))
-        self.collector.record_task_event(
-            _task_event("t2", "tasks.do_thing", EventType.TASK_RECEIVED.value, "worker-a")
-        )
+        self.collector.record_task_event(_task_event("t2", "tasks.do_thing", EventType.TASK_RECEIVED.value, "worker-a"))
 
         labels = _sample_label_tuples(self.collector, "kanchi_task_events")
         self.assertEqual(
