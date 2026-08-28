@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.5.4] - 2026-08-28
+
+### Bug Fixes
+
+- Remove stale worker label series on worker-offline ([`73fbd65`](https://github.com/zen-strayer/kanchi/commit/73fbd651df299d19836d055f3255d4d111b75cc0))
+
 ## [1.5.3] - 2026-06-16
 
 ### Bug Fixes
