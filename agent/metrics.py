@@ -1,7 +1,7 @@
 import threading
 from datetime import UTC, datetime
 
-from prometheus_client import Counter, Gauge, Histogram
+from prometheus_client import REGISTRY, CollectorRegistry, Counter, Gauge, Histogram
 
 from constants import COMPLETED_EVENT_TYPES, EventType
 from models import TaskEvent, WorkerEvent
@@ -25,42 +25,55 @@ def _safe_worker(worker: str | None) -> str:
 
 
 class MetricsCollector:
-    def __init__(self):
+    def __init__(self, registry: CollectorRegistry = REGISTRY):
+        self.registry = registry
         self.task_events_total = Counter(
             "kanchi_task_events_total",
             "Count of task-related events observed by Kanchi from the Celery broker.",
             ["task_name", "event_type", "worker"],
+            registry=registry,
         )
         self.task_queue_wait_seconds = Gauge(
             "kanchi_task_queue_wait_seconds",
             "Time a task spent queued at a worker before execution began.",
             ["task_name", "worker"],
+            registry=registry,
         )
         self.worker_prefetch_count = Gauge(
             "kanchi_worker_prefetch_count",
             "Number of tasks currently prefetched (reserved) by a worker.",
             ["task_name", "worker"],
+            registry=registry,
         )
         self.task_execution_duration_seconds = Histogram(
             "kanchi_task_execution_duration_seconds",
             "Duration of actual task execution.",
             ["task_name", "worker"],
+            registry=registry,
         )
         self.worker_status = Gauge(
             "kanchi_worker_status",
             "Worker availability flag (1 = online, 0 = offline).",
             ["worker"],
+            registry=registry,
         )
         self.worker_active_tasks = Gauge(
             "kanchi_worker_active_tasks",
             "Count of tasks currently being processed by a given worker.",
             ["worker"],
+            registry=registry,
         )
 
         self._received_at: dict[str, float] = {}
         self._started_at: dict[str, float] = {}
         self._prefetched_counts: dict[tuple[str, str], int] = {}
         self._active_counts: dict[str, int] = {}
+        # Label combinations seen per worker, so a worker's series can be fully
+        # removed (not just zeroed) once it goes offline. Celery `hostname`
+        # embeds the pod name, so without this every rollout/scale event
+        # would leave permanent, ever-growing label series behind.
+        self._worker_task_names: dict[str, set[str]] = {}
+        self._worker_task_event_types: dict[str, set[tuple[str, str]]] = {}
         self._lock = threading.Lock()
 
     def record_task_event(self, task_event: TaskEvent):
@@ -74,6 +87,7 @@ class MetricsCollector:
             event_type=task_event.event_type,
             worker=worker,
         ).inc()
+        self._track_worker_labels(worker, task_name, task_event.event_type)
 
         if task_event.event_type == EventType.TASK_RECEIVED.value:
             self._track_received(task_event.task_id, ts)
@@ -98,14 +112,46 @@ class MetricsCollector:
         worker = _safe_worker(worker_event.hostname)
         is_offline = worker_event.event_type == EventType.WORKER_OFFLINE.value
 
-        self.worker_status.labels(worker=worker).set(0 if is_offline else 1)
+        if is_offline:
+            self._remove_worker_series(worker)
+            return
+
+        self.worker_status.labels(worker=worker).set(1)
 
         if worker_event.active is not None:
             self._set_active(worker, max(worker_event.active, 0))
 
-        if is_offline:
-            self._set_active(worker, 0)
-            self._reset_prefetch_for_worker(worker)
+    def _track_worker_labels(self, worker: str, task_name: str, event_type: str):
+        with self._lock:
+            self._worker_task_names.setdefault(worker, set()).add(task_name)
+            self._worker_task_event_types.setdefault(worker, set()).add((task_name, event_type))
+
+    def _remove_worker_series(self, worker: str):
+        with self._lock:
+            task_names = self._worker_task_names.pop(worker, set())
+            task_event_types = self._worker_task_event_types.pop(worker, set())
+            self._active_counts.pop(worker, None)
+            prefetch_keys = [key for key in self._prefetched_counts if key[1] == worker]
+            for key in prefetch_keys:
+                self._prefetched_counts.pop(key, None)
+
+        for task_name, event_type in task_event_types:
+            self._remove_series(self.task_events_total, task_name, event_type, worker)
+
+        for task_name in task_names:
+            self._remove_series(self.task_queue_wait_seconds, task_name, worker)
+            self._remove_series(self.worker_prefetch_count, task_name, worker)
+            self._remove_series(self.task_execution_duration_seconds, task_name, worker)
+
+        self._remove_series(self.worker_status, worker)
+        self._remove_series(self.worker_active_tasks, worker)
+
+    @staticmethod
+    def _remove_series(metric, *label_values: str):
+        try:
+            metric.remove(*label_values)
+        except KeyError:
+            pass
 
     def _record_queue_wait(self, task_id: str, task_name: str, worker: str, started_ts: float):
         with self._lock:
@@ -166,16 +212,6 @@ class MetricsCollector:
             task_name=task_name,
             worker=worker,
         ).set(new_value)
-
-    def _reset_prefetch_for_worker(self, worker: str):
-        with self._lock:
-            keys = [key for key in self._prefetched_counts if key[1] == worker]
-            for key in keys:
-                self._prefetched_counts.pop(key, None)
-                self.worker_prefetch_count.labels(
-                    task_name=key[0],
-                    worker=worker,
-                ).set(0)
 
     def _update_active(self, worker: str, delta: int):
         with self._lock:
