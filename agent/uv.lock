@@ -368,7 +368,7 @@ dependencies = [
     { name = "celery" },
     { name = "fastapi" },
     { name = "kanchi-sdk" },
-    { name = "kombu" },
+    { name = "kombu", extra = ["redis"] },
     { name = "prometheus-client" },
     { name = "psycopg", extra = ["binary"] },
     { name = "psycopg2-binary" },
@@ -404,7 +404,7 @@ requires-dist = [
     { name = "celery", specifier = ">=5.3.0" },
     { name = "fastapi", specifier = ">=0.104.0" },
     { name = "kanchi-sdk", specifier = ">=0.0.1" },
-    { name = "kombu", specifier = ">=5.3.0" },
+    { name = "kombu", extras = ["redis"], specifier = ">=5.3.0" },
     { name = "mysqlclient", marker = "extra == 'db-mysql-native'", specifier = ">=2.2.0" },
     { name = "prometheus-client", specifier = ">=0.22.0" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.1.12" },
@@ -449,6 +449,12 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/57/31/3e632ebce43c684dcc6eead4660b33307e6153be87e33c14e1ed9875deff/kombu-5.7.0.tar.gz", hash = "sha256:31e62fdfd2381caa3422f8e02b84a491d9a2180ddda74507b57f4cb1e1c2c2c9", size = 627051, upload-time = "2026-11-03T05:58:33.446Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/84/20/f73d8e0bff9708b0f2337220be1b5d7ebd738bc3a89b63cf44d257157014/kombu-5.7.0-py3-none-any.whl", hash = "sha256:dede73bff4c89175be382c4203d2f167cf7017c384396ec75c36a1b5678f1587", size = 266635, upload-time = "2026-11-03T05:58:31.475Z" },
+]
+
+[package.optional-dependencies]
+redis = [
+    { name = "packaging" },
+    { name = "redis" },
 ]
 
 [[package]]
