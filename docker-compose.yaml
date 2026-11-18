@@ -48,7 +48,7 @@ services:
       - kanchi_data:/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8765/api/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8765/api/health', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 5

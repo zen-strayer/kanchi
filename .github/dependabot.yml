@@ -13,3 +13,16 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 10
+
+  # Base image digests in the Dockerfile.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
