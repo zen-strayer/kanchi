@@ -1,0 +1,54 @@
+name: Image Scan
+
+# Builds the runtime image and fails when it contains HIGH or CRITICAL
+# vulnerabilities that have a published fix. The weekly run catches new CVEs
+# in an image whose Dockerfile and lockfiles did not change.
+
+on:
+  pull_request:
+  merge_group:
+  schedule:
+    - cron: "0 13 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  IMAGE_REF: kanchi:scan
+  # Pinned by digest: trivy v0.76.2.
+  TRIVY_IMAGE: aquasec/trivy@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb
+
+jobs:
+  trivy:
+    name: trivy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: ${{ env.IMAGE_REF }}
+
+      - name: Scan image
+        run: |
+          # Report every fixable HIGH/CRITICAL finding, then fail if any exist.
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$HOME/.cache/trivy:/root/.cache/trivy" \
+            "$TRIVY_IMAGE" image \
+              --scanners vuln \
+              --severity HIGH,CRITICAL \
+              --ignore-unfixed \
+              --exit-code 1 \
+              --format table \
+              "$IMAGE_REF"
