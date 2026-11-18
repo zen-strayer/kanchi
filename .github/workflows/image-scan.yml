@@ -39,6 +39,17 @@ jobs:
           push: false
           tags: ${{ env.IMAGE_REF }}
 
+      - name: Check runtime imports
+        run: |
+          # The test suite runs with dev deps installed, which can hide a
+          # runtime dep that only arrives transitively. Import the app and the
+          # broker transports inside the image itself.
+          docker run --rm -w /app/agent \
+            -e CELERY_BROKER_URL=redis://localhost:6379/0 \
+            -e DATABASE_URL=sqlite:////tmp/kanchi.db \
+            "$IMAGE_REF" \
+            python -c "import kombu.transport.redis, kombu.transport.pyamqp, app"
+
       - name: Scan image
         run: |
           # Report every fixable HIGH/CRITICAL finding, then fail if any exist.
