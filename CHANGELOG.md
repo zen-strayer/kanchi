@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.5.5] - 2026-11-18
+
+### Bug Fixes
+
+- Upgrade Python dependencies to patched versions [NOJIRA] ([`e92e72b`](https://github.com/zen-strayer/kanchi/commit/e92e72b46942d038cefe1208261517a780876ab1))
+- Declare kombu's redis extra so the redis transport imports [NOJIRA] ([`a265db3`](https://github.com/zen-strayer/kanchi/commit/a265db3214b12413c2c0bbe7aeb257c0803a31b5))
+- Update frontend lockfile to patched versions [NOJIRA] ([`eea7876`](https://github.com/zen-strayer/kanchi/commit/eea7876189829773f8211ed60f729c39a4edb2e9))
+- Rebuild runtime image on patched bases and drop unused packages [NOJIRA] ([`ae87515`](https://github.com/zen-strayer/kanchi/commit/ae875154cdc12e1ced3e34181fd08623e6fc5f89))
+
 ## [1.5.4] - 2026-08-28
 
 ### Bug Fixes
